@@ -1,0 +1,54 @@
+<idea-plugin>
+    <id>com.ypwang.plugin.go-linter</id>
+    <name>Go Linter</name>
+    <version>1.0.0</version>
+    <vendor email="g04103582@gmail.com" url="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint">Wang</vendor>
+
+    <description><![CDATA[
+<p>
+This plugin provides an user interface within Intellij/Goland to easily use
+golangci-lint on your project's sources.
+</p>
+
+<p>
+<b>All credit goes to <a href="https://github.com/golangci/golangci-lint">golangci-lint authors</a></b>
+</p>
+
+<p>
+GolangCI-Lint is a linters aggregator. It's fast: on average 5 times faster
+than gometalinter. It's easy to integrate and use, has nice output and has a
+minimum number of false positives. It supports go modules.
+</p>
+
+<p>
+When running golangci-lint, it performs a static code analysis to find some
+common issues and code style violations and provides fixes which can be applied
+to your code.
+</p>
+]]></description>
+
+    <idea-version since-build="183.*"/>
+
+    <!-- please see http://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
+         on how to target different products -->
+    <depends>com.intellij.modules.lang</depends>
+    <depends>org.jetbrains.plugins.go</depends>
+
+    <project-components>
+        <component>
+            <implementation-class>com.ypwang.plugin.GoLinterSettingsTracker</implementation-class>
+        </component>
+    </project-components>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <projectConfigurable groupId="tools" displayName="Go Linter" id="preference.GoLinterConfigurable" instance="com.ypwang.plugin.form.GoLinterSettings" />
+        <!-- Add your extensions here -->
+        <localInspection displayName="Linter" groupPath="Go" id="GoLinterLocal" language="go"
+                         groupName="Code style issues" enabledByDefault="true" level="WARNING"
+                         implementationClass="com.ypwang.plugin.GoLinterLocalInspection"/>
+    </extensions>
+
+    <actions>
+        <!-- Add your actions here -->
+    </actions>
+</idea-plugin>
