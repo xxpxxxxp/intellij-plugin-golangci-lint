@@ -21,11 +21,20 @@ import com.ypwang.plugin.util.Log
 import com.ypwang.plugin.util.ProcessWrapper
 import java.io.File
 import java.nio.file.Paths
-import javax.management.Notification
+import java.util.concurrent.locks.*
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
 class GoLinterLocalInspection : LocalInspectionTool() {
+    class InspectionResult {
+        var timeStamp: Long = Long.MIN_VALUE
+        var mutex: Lock = ReentrantLock()
+        var issues: List<LintIssue>? = null
+    }
+
     companion object {
-        var lintResult = mutableMapOf<String, Pair<Long, List<LintIssue>>>()
+        var lintResult = mutableMapOf<String, InspectionResult>()
+        val mapMutex = ReentrantReadWriteLock()
 
         fun isSaved(file: PsiFile): Boolean {
             val virtualFile = file.virtualFile
@@ -39,7 +48,6 @@ class GoLinterLocalInspection : LocalInspectionTool() {
     }
 
     override fun checkFile(file: PsiFile, manager: InspectionManager, isOnTheFly: Boolean): Array<ProblemDescriptor>? {
-        Log.golinter.info("Into my plugin")
         if (!File(GoLinterConfig.goLinterExe).canExecute()) return null     // no linter executable
 
         if (file !is GoFile && isSaved(file))
@@ -51,98 +59,124 @@ class GoLinterLocalInspection : LocalInspectionTool() {
            If not, we'll use its absolute path directly,
            but in such case some linter may not working well, because they need overall symbols
         */
-        val absolutePath = file.virtualFile.path
+        val absolutePath = Paths.get(file.virtualFile.path)
 
         val goPluginSettings = GoProjectLibrariesService.getInstance(manager.project)
-        val goPaths = goPluginSettings.state.urls.map { VirtualFileManager.extractPath(it) }.toMutableList()
+        val goPaths = goPluginSettings.state.urls.map { Paths.get(VirtualFileManager.extractPath(it), "src") }.toMutableList()
         if (goPluginSettings.isUseGoPathFromSystemEnvironment) {
-            System.getenv("GOPATH")?.let { goPaths.addAll(it.split(':')) }
+            System.getenv("GOPATH")?.let { goPaths.addAll(it.split(':').map { path -> Paths.get(path, "src") }) }
         }
 
         val theGoPath = goPaths.singleOrNull{ absolutePath.startsWith(it) }
-        var absolute = Paths.get(absolutePath)
 
-        var matchingName = absolute.fileName.toString()
-        var checkName = absolute.fileName.toString()
-        var workingDir = absolute.parent.toString()
+        var matchingName = absolutePath.fileName.toString()
+        var checkName = absolutePath.fileName.toString()
+        var workingDir = absolutePath.parent.toString()
 
         if (theGoPath != null) {
             // If we locate the file in 1 of 'GOPATH', extract its root dir
             // Go module in a 'GOPATH' should locate in 'GOPATH/src/'
-            val srcPath = Paths.get("$theGoPath/src")
-            while (true) {
-                val parent = absolute.parent
-                if (parent == null || parent == srcPath) break
-                absolute = parent
-            }
+            val subtract = theGoPath.relativize(absolutePath)
 
-            if (absolute.parent != null) {
+            if (subtract.nameCount > 1) {
                 // absolute.parent == srcPath
-                workingDir = srcPath.toString()
-                checkName = "${absolute.fileName}/..."       // it's a folder
-                matchingName = absolutePath.substring(workingDir.length + 1)
+                workingDir = theGoPath.toString()
+                checkName = "${subtract.getName(0)}${File.separator}..."       // it's a folder
+                matchingName = subtract.toString()
             }
         }
 
-        Log.golinter.info("Working Dir: $workingDir")
-        Log.golinter.info("Check Name: $checkName")
-        Log.golinter.info("Matching Name: $matchingName")
+        Log.golinter.info("Working Dir = $workingDir, Check Name = $checkName, Matching Name = $matchingName")
 
-        // newly opened file without modified could benefit from previous run
-        if (workingDir !in lintResult || lintResult[workingDir]!!.first < File(absolutePath).lastModified()) {
-            // build parameters
-            val parametes = mutableListOf(GoLinterConfig.goLinterExe, "--out-format", "json")
-
-            if (GoLinterConfig.useCustomOptions) {
-                parametes.addAll(GoLinterConfig.customOptions)
+        // intellij will instant as many inspection clazz as opened tab
+        // for those tab share same folder, we could just run once lint
+        // for those tab don't share folder, we should allow them to run in parallel
+        mapMutex.read {
+            if (workingDir !in lintResult) {
+                mapMutex.write {
+                    lintResult[workingDir] = InspectionResult()
+                }
             }
 
-            if (!GoLinterConfig.useConfigFile && GoLinterConfig.enabledLinters != null) {
-                parametes.add("--disable-all")
-                parametes.add("-E")
-                parametes.add(GoLinterConfig.enabledLinters!!.joinToString(","))
+            val rstRefer = lintResult[workingDir]!!
+            // newly opened file without modified could benefit from previous run
+            if (rstRefer.timeStamp < absolutePath.toFile().lastModified()) {
+                // run inspection now
+                try {
+                    if (rstRefer.mutex.tryLock()) {
+                        Log.golinter.info("Last run time ${rstRefer.timeStamp}, file change stamp ${absolutePath.toFile().lastModified()}")
+                        // locked, run now
+                        // build parameters
+                        val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
+                        if (GoLinterConfig.useCustomOptions) {
+                            parameters.addAll(GoLinterConfig.customOptions)
+                        }
+
+                        if (!parameters.contains("--concurrency")) {
+                            parameters.add("--concurrency")
+                            parameters.add(maxOf(1, Runtime.getRuntime().availableProcessors() / 4).toString())
+                        }
+
+                        if (!GoLinterConfig.useConfigFile && GoLinterConfig.enabledLinters != null) {
+                            parameters.add("--disable-all")
+                            parameters.add("-E")
+                            parameters.add(GoLinterConfig.enabledLinters!!.joinToString(",") { it.split(' ').first() })
+                        }
+                        parameters.add(checkName)
+
+                        val scanResultRaw = ProcessWrapper.runWithArguments(parameters, workingDir)
+                        if (scanResultRaw.returnCode == 1) {     // default exit code is 1
+                            rstRefer.timeStamp = System.currentTimeMillis()
+                            rstRefer.issues = Gson().fromJson(scanResultRaw.stdout, LintReport::class.java).Issues
+                        }
+                        else {
+                            // linter run error, clean cache
+                            Log.golinter.error("Run error: ${scanResultRaw.stderr}")
+                            rstRefer.timeStamp = Long.MIN_VALUE
+                            rstRefer.issues = null
+
+                            val notification = NotificationGroup.balloonGroup("Go linter notifications")
+                                .createNotification("Go linter parameters error", "golangci-lint parameters is wrongly configured", NotificationType.ERROR, null as NotificationListener?)
+
+                            notification.addAction(NotificationAction.createSimple("Configure") {
+                                ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
+                                notification.expire()
+                            })
+
+                            notification.notify(manager.project)
+                        }
+                    } else {
+                        // blocking now
+                        Log.golinter.info("Collide with another running instance, wait for other's result")
+                        rstRefer.mutex.lock()
+                    }
+                } finally {
+                    rstRefer.mutex.unlock()
+                }
             }
 
-            val scanResultRaw = ProcessWrapper.runWithArguments(parametes, workingDir)
-            if (scanResultRaw.returnCode == 0)
-                lintResult[workingDir] = System.currentTimeMillis() to Gson().fromJson(scanResultRaw.stdout, LintReport::class.java).Issues
-            else {
-                // linter run error, clean cache
-                lintResult.remove(workingDir)
+            val document = FileDocumentManager.getInstance().getDocument(file.virtualFile)!!
+            return rstRefer.issues?.let { kv ->
+                kv.asSequence().filter { it.Pos.Filename == matchingName && it.Pos.Line - 1 < document.lineCount }
+                    .map { issue ->
+                        val lineNumber = issue.Pos.Line - 1
+                        val lineStart = document.getLineStartOffset(lineNumber)
+                        val lineEnd = document.getLineEndOffset(lineNumber)
 
-                val notification = NotificationGroup.balloonGroup("Go linter notifications")
-                    .createNotification("Go linter parameters error", "golangci-lint parameters is wrongly configured", NotificationType.ERROR, null as NotificationListener?)
-
-                notification.addAction(NotificationAction.createSimple("Configure") {
-                    ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
-                    notification.expire()
-                })
-
-                notification.notify(manager.project)
+                        Triple(lineStart + issue.Pos.Column - 1, lineEnd, "${issue.Text} (${issue.FromLinter})")
+                    }.filter {
+                        // this may happen on hot edit, PsiFile is not updated as soon as the file saved
+                        it.first <= it.second
+                    }.map { (start, end, text) ->
+                        manager.createProblemDescriptor(
+                            file,
+                            TextRange.create(start, end),
+                            text,
+                            ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
+                            isOnTheFly
+                        )
+                    }.toList().toTypedArray()
             }
-        }
-
-        //lintResult[workingDir] = System.currentTimeMillis() to Gson().fromJson(File("/Users/ypwang/sources/dev/goland-linter/src/main/resources/test.json").readText(), LintReport::class.java).Issues
-
-        val document = FileDocumentManager.getInstance().getDocument(file.virtualFile)!!
-        return lintResult[workingDir]?.let { kv ->
-            kv.second.filter { it.Pos.Filename == matchingName && it.Pos.Line - 1 < document.lineCount }
-                .map { issue ->
-                    val lineNumber = issue.Pos.Line - 1
-                    val lineStart = document.getLineStartOffset(lineNumber)
-                    val lineEnd = document.getLineEndOffset(lineNumber)
-
-                    manager.createProblemDescriptor(
-                        file,
-                        TextRange.create(
-                            maxOf(issue.Pos.Offset, lineStart),
-                            minOf(issue.Pos.Offset + issue.SourceLines.first().length, lineEnd)
-                        ),
-                        "${issue.Text} (${issue.FromLinter})",
-                        ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
-                        isOnTheFly
-                    )
-                }.toTypedArray()
         }
     }
 }

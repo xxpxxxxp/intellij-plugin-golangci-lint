@@ -2,12 +2,12 @@ package com.ypwang.plugin.util
 
 import com.intellij.openapi.diagnostic.Logger
 import java.io.*
-import java.nio.file.Files
 
 data class RunProcessResult(val returnCode: Int, val stdout: String, val stderr: String)
 
 object ProcessWrapper {
     fun runWithArguments(arguments: List<String>, workingDir: String? = null): RunProcessResult {
+        Log.golinter.info("Execute parameter: ${ arguments.joinToString(" ") }")
         val pb = ProcessBuilder(arguments)
 
         if (workingDir != null) pb.directory(File(workingDir))

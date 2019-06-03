@@ -23,7 +23,8 @@ dependencies {
 intellij {
     version 'LATEST-EAP-SNAPSHOT'
     type 'IU'
-    plugins 'org.jetbrains.plugins.go:191.6183.87.172'
+    plugins 'org.jetbrains.plugins.go:192.4205.45.2489'
+    intellij.updateSinceUntilBuild false
 }
 compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
@@ -39,4 +40,9 @@ patchPluginXml {
     <li>Initial plugin release version</li>
   </ul>
 </p>"""
+}
+publishPlugin {
+    channels 'alpha'
+    username intellijPublishUsername
+    password intellijPublishPassword
 }

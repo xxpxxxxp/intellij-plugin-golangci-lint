@@ -2,3 +2,5 @@
 .idea
 .gradle
 build/
+
+gradle.properties

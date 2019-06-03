@@ -25,6 +25,7 @@ import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.*;
 import com.ypwang.plugin.*;
 import com.ypwang.plugin.util.Log;
+import kotlin.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -93,48 +94,36 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         cl.show(linterSelectPanel, "refreshProcessIcon");
 
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            DefaultTableModel model = new DefaultTableModel(new String[]{"Enabled", "Name", "Description"}, 0) {
-                @Override
-                public Class<?> getColumnClass(int columnIndex) {
-                    if (columnIndex == 0) return Boolean.class;
-                    else return String.class;
-                }
-
-                @Override
-                public boolean isCellEditable(int row, int column) {
-                    return column == 0;
-                }
-            };
-
             if (linterComboBox.getSelectedItem() != null) {
-                GoSupportedLinters extractedLinters = GoSupportedLinters.Companion.getInstance(linterComboBox.getSelectedItem().toString());
-                TreeMap<String, String> allLinters = new TreeMap<>(extractedLinters.getDefaultEnabledLinters());
-                allLinters.putAll(extractedLinters.getDefaultDisabledLinters());
+                DefaultTableModel model = (DefaultTableModel)lintersTable.getModel();
+                for (int i = model.getRowCount() - 1; i > -1; i--) {
+                    model.removeRow(i);
+                }
 
-                Map<String, String> enabledLinters = extractedLinters.getDefaultEnabledLinters();
+                GoSupportedLinters extractedLinters = GoSupportedLinters.Companion.getInstance(linterComboBox.getSelectedItem().toString());
+                List<Pair<String, String>> allLinters = new LinkedList<>(extractedLinters.getDefaultEnabledLinters());
+                allLinters.addAll(extractedLinters.getDefaultDisabledLinters());
+
+                Map<String, String> enabledLinters = new HashMap<>();
                 String[] enabledLintersInConfig = GoLinterConfig.INSTANCE.getEnabledLinters();
                 if (enabledLintersInConfig != null) {
-                    enabledLinters.clear();
                     for (String linter: enabledLintersInConfig) {
                         enabledLinters.put(linter, "");
                     }
+                } else {
+                    for (Pair<String, String> p: extractedLinters.getDefaultEnabledLinters()) {
+                        enabledLinters.put(p.component1(), p.component2());
+                    }
                 }
 
-                for (Map.Entry<String, String> linter: allLinters.entrySet()) {
+                for (Pair<String, String> linter: allLinters) {
                     model.addRow(new Object[]{
-                            enabledLinters.containsKey(linter.getKey()),
-                            linter.getKey(),
-                            linter.getValue()
+                            enabledLinters.containsKey(linter.component1()),
+                            linter.component1(),
+                            linter.component2()
                     });
                 }
-
-                model.addTableModelListener(e -> modified = true);
             }
-
-            lintersTable.setModel(model);
-            lintersTable.getColumnModel().getColumn(0).setPreferredWidth(15);
-            lintersTable.getColumnModel().getColumn(1).setPreferredWidth(100);
-            lintersTable.getColumnModel().getColumn(2).setPreferredWidth(400);
 
             cl.show(linterSelectPanel, "lintersTable");
             refreshProcessIcon.suspend();
@@ -157,6 +146,24 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         linterSelectPanel.add("refreshProcessIcon", refreshProcessIcon);
 
         linterComboBox.setRenderer(new FileExistCellRender());
+
+        DefaultTableModel model = new DefaultTableModel(new String[]{"Enabled", "Name", "Description"}, 0) {
+            @Override
+            public Class<?> getColumnClass(int columnIndex) {
+                if (columnIndex == 0) return Boolean.class;
+                else return String.class;
+            }
+
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return column == 0;
+            }
+        };
+        model.addTableModelListener(e -> modified = true);
+        lintersTable.setModel(model);
+        lintersTable.getColumnModel().getColumn(0).setPreferredWidth(15);
+        lintersTable.getColumnModel().getColumn(1).setPreferredWidth(100);
+        lintersTable.getColumnModel().getColumn(2).setPreferredWidth(400);
 
         // Components initialization
         new ComponentValidator(curProject).withValidator(v -> {
@@ -184,7 +191,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         // find if there's golangci-lint in system path
         String systemPath = System.getenv("PATH");
         if (systemPath != null) {
-            String[] paths = systemPath.split(PlatformSettings.INSTANCE.getPathSpliter());
+            String[] paths = systemPath.split(File.pathSeparator);
 
             for (String path : paths) {
                 String fullPath = path + '/' + PlatformSettings.INSTANCE.getLinterExecutableName();
@@ -207,7 +214,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         HashSet<String> rst = new HashSet<>();
 
         if (goPath != null) {
-            for (String path: goPath.split(PlatformSettings.INSTANCE.getPathSpliter())) {
+            for (String path: goPath.split(File.pathSeparator)) {
                 String fullPath = String.format("%s/bin/%s", path, PlatformSettings.INSTANCE.getLinterExecutableName());
                 if (new File(fullPath).isFile()) {
                     rst.add(fullPath);

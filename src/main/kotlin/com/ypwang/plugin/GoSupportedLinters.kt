@@ -5,8 +5,8 @@ import com.ypwang.plugin.util.ProcessWrapper
 
 class GoSupportedLinters private constructor(private val exec: String) {
     // (linter, description)
-    val defaultEnabledLinters: Map<String, String>
-    val defaultDisabledLinters: Map<String, String>
+    val defaultEnabledLinters: List<Pair<String, String>>
+    val defaultDisabledLinters: List<Pair<String, String>>
 
     init {
         val (enabled, disabled) =
@@ -18,8 +18,8 @@ class GoSupportedLinters private constructor(private val exec: String) {
                 val linterRaw = result.stdout.lines()
 
                 // parse output
-                val enabledLinters = mutableMapOf<String, String>()
-                val disabledLinters = mutableMapOf<String, String>()
+                val enabledLinters = mutableListOf<Pair<String, String>>()
+                val disabledLinters = mutableListOf<Pair<String, String>>()
 
                 var enabled = true
                 for (line in linterRaw) {
@@ -35,15 +35,15 @@ class GoSupportedLinters private constructor(private val exec: String) {
 
                     val firstColon = line.indexOfFirst { it == ':' }
                     if (firstColon != -1) {
-                        (if (enabled) enabledLinters else disabledLinters)[line.substring(0, firstColon)] =
-                            line.substring(firstColon + 1)
+                        (if (enabled) enabledLinters else disabledLinters).add(line.substring(0, firstColon) to line.substring(firstColon + 1))
+
                     }
                 }
 
                 enabledLinters to disabledLinters
             } catch (e: Exception) {
                 Log.golinter.error("Cannot get linters from $exec")
-                mutableMapOf<String, String>() to mutableMapOf<String, String>()
+                listOf<Pair<String, String>>() to listOf<Pair<String, String>>()
             }
 
         defaultEnabledLinters = enabled
