@@ -2,7 +2,7 @@
     <id>com.ypwang.plugin.go-linter</id>
     <name>Go Linter</name>
     <version>1.0.0</version>
-    <vendor email="g04103582@gmail.com" url="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint">Wang</vendor>
+    <vendor email="g04103582@gmail.com" url="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint">Go Linter</vendor>
 
     <description><![CDATA[
 <p>

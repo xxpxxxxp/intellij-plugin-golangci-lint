@@ -1,26 +1,46 @@
 package com.ypwang.plugin.util
 
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.progress.ProcessCanceledException
 import java.io.*
+import java.util.concurrent.TimeUnit
 
 data class RunProcessResult(val returnCode: Int, val stdout: String, val stderr: String)
 
+@FunctionalInterface
+interface ProcessInterruptAction {
+    fun isCancelled(process: Process): Boolean
+}
+
 object ProcessWrapper {
-    fun runWithArguments(arguments: List<String>, workingDir: String? = null): RunProcessResult {
+    fun createProcessWithArguments(arguments: List<String>, workingDir: String? = null): Process {
         Log.golinter.info("Execute parameter: ${ arguments.joinToString(" ") }")
         val pb = ProcessBuilder(arguments)
-
         if (workingDir != null) pb.directory(File(workingDir))
+        return pb.start()
+    }
 
-        val process = pb.start()
-
+    fun fetchProcessOutput(process: Process, timeoutInMillisec: Long = 0L, cancelAction: ProcessInterruptAction? = null): RunProcessResult {
         val outputConsumer = ByteArrayOutputStream()
         val outputThread = OutputReader.fetch(process.inputStream, outputConsumer)
         val errorConsumer = ByteArrayOutputStream()
         val errorThread = OutputReader.fetch(process.errorStream, errorConsumer)
 
         try {
-            val returnCode = process.waitFor()
+            val returnCode =
+                if (timeoutInMillisec <= 0L || cancelAction == null) process.waitFor()
+                else {
+                    (fun(): Int {
+                        while (true) {
+                            if (process.waitFor(timeoutInMillisec, TimeUnit.MILLISECONDS)) return process.exitValue()
+                            if (cancelAction.isCancelled(process)) {
+                                process.destroy()
+                                throw ProcessCanceledException()
+                            }
+                        }
+                    })()
+                }
+
             errorThread.join()
             outputThread.join()
 
@@ -31,6 +51,9 @@ object ProcessWrapper {
 
         return RunProcessResult(-1, "", "")
     }
+
+    fun runWithArguments(arguments: List<String>, workingDir: String? = null): RunProcessResult
+        = fetchProcessOutput(createProcessWithArguments(arguments, workingDir))
 }
 
 private class OutputReader(val inputStream: InputStream, val consumer: ByteArrayOutputStream) : Runnable {

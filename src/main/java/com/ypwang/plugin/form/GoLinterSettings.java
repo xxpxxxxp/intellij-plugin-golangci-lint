@@ -6,6 +6,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.openapi.options.SearchableConfigurable;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
@@ -25,13 +26,13 @@ import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.*;
 import com.ypwang.plugin.*;
 import com.ypwang.plugin.util.Log;
+import com.ypwang.plugin.util.RunProcessResult;
 import kotlin.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -365,6 +366,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private void goGet(ActionEvent e) {
         try {
             ProgressManager.getInstance().runProcessWithProgressSynchronously(() -> {
+                ProgressIndicator progressIndicator = ProgressManager.getInstance().getProgressIndicator();
+
                 String goRoot = GoSdkService.getInstance(curProject).getSdk(null).getHomePath();
                 Log.INSTANCE.getGolinter().info("GOROOT is " + goRoot);
 
@@ -377,7 +380,6 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                     throw new Exception("Cannot find Go executable in GOROOT");
                 }
 
-                ProgressIndicator progressIndicator = ProgressManager.getInstance().getProgressIndicator();
                 progressIndicator.setIndeterminate(true);
                 List<String> arguments = new LinkedList<>();
                 arguments.add(goExecutablePath);
@@ -385,12 +387,18 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                 arguments.add("-u");
                 arguments.add("github.com/golangci/golangci-lint/cmd/golangci-lint");
 
-                if (ProcessWrapper.INSTANCE.runWithArguments(arguments, null).component1() != 0) {
+                RunProcessResult result = ProcessWrapper.INSTANCE.fetchProcessOutput(
+                    ProcessWrapper.INSTANCE.createProcessWithArguments(arguments, null),
+                    200, p -> progressIndicator.isCanceled());
+
+                if (result.component1() != 0) {
                     throw new Exception("Failed to get golangci-lint");
                 }
 
                 return true;
-            }, "Go Get From Github", false, curProject);
+            }, "Go Get From Github", true, curProject);
+        } catch (ProcessCanceledException ex) {
+            Log.INSTANCE.getGolinter().info("go get golangci-lint cancelled");
         } catch (Exception ex) {
             showDialog("go get golangci-lint", ex.getMessage());
         }
