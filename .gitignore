@@ -2,5 +2,6 @@
 .idea
 .gradle
 build/
+project/
 
 gradle.properties

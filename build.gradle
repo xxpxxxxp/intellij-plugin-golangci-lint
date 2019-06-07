@@ -23,7 +23,7 @@ dependencies {
 intellij {
     version 'LATEST-EAP-SNAPSHOT'
     type 'IU'
-    plugins 'org.jetbrains.plugins.go:192.4205.45.2489'
+    plugins 'org.jetbrains.plugins.go:192.4488.21.2525'
     intellij.updateSinceUntilBuild false
 }
 compileKotlin {
@@ -40,9 +40,4 @@ patchPluginXml {
     <li>Initial plugin release version</li>
   </ul>
 </p>"""
-}
-publishPlugin {
-    channels 'alpha'
-    username intellijPublishUsername
-    password intellijPublishPassword
 }

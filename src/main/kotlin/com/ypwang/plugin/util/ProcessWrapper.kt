@@ -14,7 +14,7 @@ interface ProcessInterruptAction {
 
 object ProcessWrapper {
     fun createProcessWithArguments(arguments: List<String>, workingDir: String? = null): Process {
-        Log.golinter.info("Execute parameter: ${ arguments.joinToString(" ") }")
+        Log.goLinter.info("Execute parameter: ${ arguments.joinToString(" ") }")
         val pb = ProcessBuilder(arguments)
         if (workingDir != null) pb.directory(File(workingDir))
         return pb.start()

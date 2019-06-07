@@ -5,7 +5,6 @@ import com.goide.psi.GoFile
 import com.google.gson.Gson
 import com.intellij.codeInspection.*
 import com.intellij.notification.NotificationAction
-import com.intellij.notification.NotificationGroup
 import com.intellij.notification.NotificationListener
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -16,6 +15,7 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiFile
 import com.ypwang.plugin.form.GoLinterSettings
 import com.ypwang.plugin.model.*
+import com.ypwang.plugin.util.GoLinterNotificationGroup
 
 import com.ypwang.plugin.util.Log
 import com.ypwang.plugin.util.ProcessWrapper
@@ -86,7 +86,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             }
         }
 
-        Log.golinter.info("Working Dir = $workingDir, Check Name = $checkName, Matching Name = $matchingName")
+        Log.goLinter.info("Working Dir = $workingDir, Check Name = $checkName, Matching Name = $matchingName")
 
         // intellij will instant as many inspection clazz as opened tab
         // for those tab share same folder, we could just run once lint
@@ -104,7 +104,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 // run inspection now
                 try {
                     if (rstRefer.mutex.tryLock()) {
-                        Log.golinter.info("Last run time ${rstRefer.timeStamp}, file change stamp ${absolutePath.toFile().lastModified()}")
+                        Log.goLinter.info("Last run time ${rstRefer.timeStamp}, file change stamp ${absolutePath.toFile().lastModified()}")
                         // locked, run now
                         // build parameters
                         val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
@@ -131,11 +131,11 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                         }
                         else {
                             // linter run error, clean cache
-                            Log.golinter.error("Run error: ${scanResultRaw.stderr}")
+                            Log.goLinter.error("Run error: ${scanResultRaw.stderr}")
                             rstRefer.timeStamp = Long.MIN_VALUE
                             rstRefer.issues = null
 
-                            val notification = NotificationGroup.balloonGroup("Go linter notifications")
+                            val notification = GoLinterNotificationGroup.instance
                                 .createNotification("Go linter parameters error", "golangci-lint parameters is wrongly configured", NotificationType.ERROR, null as NotificationListener?)
 
                             notification.addAction(NotificationAction.createSimple("Configure") {
@@ -147,7 +147,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                         }
                     } else {
                         // blocking now
-                        Log.golinter.info("Collide with another running instance, wait for other's result")
+                        Log.goLinter.info("Collide with another running instance, wait for other's result")
                         rstRefer.mutex.lock()
                     }
                 } finally {

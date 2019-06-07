@@ -37,6 +37,8 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.List;
 
@@ -58,6 +60,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private boolean modified = false;
     private HashSet<String> lintersInPath;
     private Project curProject;
+
+    private String selectedLinter;
 
     public GoLinterSettings(@NotNull Project project) {
         curProject = project;
@@ -85,7 +89,6 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         // trigger table change
         else {
             linterComboBox.setSelectedIndex(-1);
-            refreshLinterTable();
         }
     }
 
@@ -97,9 +100,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             if (linterComboBox.getSelectedItem() != null) {
                 DefaultTableModel model = (DefaultTableModel)lintersTable.getModel();
-                for (int i = model.getRowCount() - 1; i > -1; i--) {
-                    model.removeRow(i);
-                }
+                model.setRowCount(0);
 
                 GoSupportedLinters extractedLinters = GoSupportedLinters.Companion.getInstance(linterComboBox.getSelectedItem().toString());
                 List<Pair<String, String>> allLinters = new LinkedList<>(extractedLinters.getDefaultEnabledLinters());
@@ -167,17 +168,17 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         lintersTable.getColumnModel().getColumn(2).setPreferredWidth(400);
 
         // Components initialization
-        new ComponentValidator(curProject).withValidator(v -> {
+        new ComponentValidator(curProject).withValidator(() -> {
             String text = customOptionsField.getText();
             if (text.contains("-E") || text.contains("-D")) {
-                v.updateInfo(new ValidationInfo("Please enable/disable linters in table below", customOptionsField));
                 modified = false;
+                return new ValidationInfo("Please enable/disable linters in table below", customOptionsField);
             } else if (text.contains("-v") || text.contains("--out-format")) {
-                v.updateInfo(new ValidationInfo("'--verbose'/'--out-format' is not allowed", customOptionsField));
                 modified = false;
+                return new ValidationInfo("'--verbose'/'--out-format' is not allowed", customOptionsField);
             } else {
-                v.updateInfo(null);
                 modified = true;
+                return null;
             }
         }).installOn(customOptionsField);
 
@@ -195,9 +196,9 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
             String[] paths = systemPath.split(File.pathSeparator);
 
             for (String path : paths) {
-                String fullPath = path + '/' + PlatformSettings.INSTANCE.getLinterExecutableName();
-                if (new File(fullPath).isFile()) {
-                    lintersInPath.add(fullPath);
+                Path fullPath = Paths.get(path, PlatformSettings.INSTANCE.getLinterExecutableName());
+                if (fullPath.toFile().canExecute()) {
+                    lintersInPath.add(fullPath.toString());
                 }
             }
         }
@@ -216,9 +217,9 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
         if (goPath != null) {
             for (String path: goPath.split(File.pathSeparator)) {
-                String fullPath = String.format("%s/bin/%s", path, PlatformSettings.INSTANCE.getLinterExecutableName());
-                if (new File(fullPath).isFile()) {
-                    rst.add(fullPath);
+                Path fullPath = Paths.get(path, "bin", PlatformSettings.INSTANCE.getLinterExecutableName());
+                if (fullPath.toFile().canExecute()) {
+                    rst.add(fullPath.toString());
                 }
             }
         }
@@ -317,10 +318,14 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     }
 
     //----------------------------- ActionListeners -----------------------------
-    private void linterSelected(ActionEvent e) {
-        if (!GoLinterConfig.INSTANCE.getGoLinterExe().equals(linterComboBox.getSelectedItem()))
-            modified = true;
-        refreshLinterTable();
+    // I don't know why but this ActionListener fire 3 times every selection
+    private synchronized void linterSelected(ActionEvent e) {
+        if (selectedLinter == null || !selectedLinter.equals(linterComboBox.getSelectedItem())) {
+            selectedLinter = (String) linterComboBox.getSelectedItem();
+            if (!GoLinterConfig.INSTANCE.getGoLinterExe().equals(linterComboBox.getSelectedItem()))
+                modified = true;
+            refreshLinterTable();
+        }
     }
 
     private void linterChoosed(ActionEvent e) {
@@ -342,10 +347,11 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                 curSelected);
 
         if (file != null) {
-            if (curSelected == null || !file.getPath().equals(curSelected.getPath()))
+            String systemPath = Paths.get(file.getPath()).toString();
+            if (curSelected == null || !systemPath.equals(curSelected.getPath()))
                 modified = true;
 
-            setLinterExecutables(file.getPath());
+            setLinterExecutables(systemPath);
         }
     }
 
@@ -369,7 +375,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                 ProgressIndicator progressIndicator = ProgressManager.getInstance().getProgressIndicator();
 
                 String goRoot = GoSdkService.getInstance(curProject).getSdk(null).getHomePath();
-                Log.INSTANCE.getGolinter().info("GOROOT is " + goRoot);
+                Log.INSTANCE.getGoLinter().info("GOROOT is " + goRoot);
 
                 if (goRoot.isEmpty()) {
                     throw new Exception("Please set GOROOT in Go plugin");
@@ -398,7 +404,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                 return true;
             }, "Go Get From Github", true, curProject);
         } catch (ProcessCanceledException ex) {
-            Log.INSTANCE.getGolinter().info("go get golangci-lint cancelled");
+            Log.INSTANCE.getGoLinter().info("go get golangci-lint cancelled");
         } catch (Exception ex) {
             showDialog("go get golangci-lint", ex.getMessage());
         }

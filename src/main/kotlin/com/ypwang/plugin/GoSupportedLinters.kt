@@ -42,7 +42,7 @@ class GoSupportedLinters private constructor(private val exec: String) {
 
                 enabledLinters to disabledLinters
             } catch (e: Exception) {
-                Log.golinter.error("Cannot get linters from $exec")
+                Log.goLinter.error("Cannot get linters from $exec")
                 listOf<Pair<String, String>>() to listOf<Pair<String, String>>()
             }
 
