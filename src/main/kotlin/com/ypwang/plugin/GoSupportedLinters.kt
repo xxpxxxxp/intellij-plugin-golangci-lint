@@ -35,7 +35,7 @@ class GoSupportedLinters private constructor(private val exec: String) {
 
                     val firstColon = line.indexOfFirst { it == ':' }
                     if (firstColon != -1) {
-                        (if (enabled) enabledLinters else disabledLinters).add(line.substring(0, firstColon) to line.substring(firstColon + 1))
+                        (if (enabled) enabledLinters else disabledLinters).add(line.substring(0, firstColon) to line.substring(firstColon + 2))
 
                     }
                 }
