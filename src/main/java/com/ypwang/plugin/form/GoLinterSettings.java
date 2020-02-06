@@ -25,9 +25,9 @@ import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.*;
 import com.ypwang.plugin.*;
+import com.ypwang.plugin.model.GoLinter;
 import com.ypwang.plugin.util.Log;
 import com.ypwang.plugin.util.RunProcessResult;
-import kotlin.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -35,7 +35,6 @@ import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.ActionEvent;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -66,11 +65,11 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     public GoLinterSettings(@NotNull Project project) {
         curProject = project;
 
-        linterComboBox.addActionListener(this::linterSelected);
-        linterChooseButton.addActionListener(this::linterChoosed);
-        goGetButton.addActionListener(this::goGet);
-        useCustomOptionsCheckBox.addActionListener(this::useCustomOptionsChecked);
-        useConfigFileCheckBox.addActionListener(this::useConfigFileChecked);
+        linterComboBox.addActionListener(e -> linterSelected());
+        linterChooseButton.addActionListener(e -> linterChoosed());
+        goGetButton.addActionListener(e -> goGet());
+        useCustomOptionsCheckBox.addActionListener(e -> useCustomOptionsChecked());
+        useConfigFileCheckBox.addActionListener(e -> useConfigFileChecked());
     }
 
     private void setLinterExecutables(String selected) {
@@ -92,7 +91,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         }
     }
 
-    private void refreshLinterTable() {
+    private synchronized void refreshLinterTable() {
         CardLayout cl = (CardLayout) linterSelectPanel.getLayout();
         refreshProcessIcon.resume();
         cl.show(linterSelectPanel, "refreshProcessIcon");
@@ -102,28 +101,31 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                 DefaultTableModel model = (DefaultTableModel)lintersTable.getModel();
                 model.setRowCount(0);
 
-                GoSupportedLinters extractedLinters = GoSupportedLinters.Companion.getInstance(linterComboBox.getSelectedItem().toString());
-                List<Pair<String, String>> allLinters = new LinkedList<>(extractedLinters.getDefaultEnabledLinters());
-                allLinters.addAll(extractedLinters.getDefaultDisabledLinters());
+                String selected = linterComboBox.getSelectedItem().toString();
+                if (Paths.get(selected).toFile().canExecute()) {
+                    List<GoLinter> allLinters = GoSupportedLinters.Companion.getInstance(selected).getLinters();
 
-                Map<String, String> enabledLinters = new HashMap<>();
-                String[] enabledLintersInConfig = GoLinterConfig.INSTANCE.getEnabledLinters();
-                if (enabledLintersInConfig != null) {
-                    for (String linter: enabledLintersInConfig) {
-                        enabledLinters.put(linter, "");
+                    Map<String, String> enabledLinters = new HashMap<>();
+                    String[] enabledLintersInConfig = GoLinterConfig.INSTANCE.getEnabledLinters();
+                    if (enabledLintersInConfig != null) {
+                        for (String linter : enabledLintersInConfig) {
+                            enabledLinters.put(linter, "");
+                        }
+                    } else {
+                        for (GoLinter l : allLinters) {
+                            if (l.getDefaultEnabled()) {
+                                enabledLinters.put(l.getName(), "");
+                            }
+                        }
                     }
-                } else {
-                    for (Pair<String, String> p: extractedLinters.getDefaultEnabledLinters()) {
-                        enabledLinters.put(p.component1(), p.component2());
-                    }
-                }
 
-                for (Pair<String, String> linter: allLinters) {
-                    model.addRow(new Object[]{
-                            enabledLinters.containsKey(linter.component1()),
-                            linter.component1(),
-                            linter.component2()
-                    });
+                    for (GoLinter linter : allLinters) {
+                        model.addRow(new Object[]{
+                                enabledLinters.containsKey(linter.getName()),
+                                linter.getFullName(),
+                                linter.getDescription()
+                        });
+                    }
                 }
             }
 
@@ -256,7 +258,11 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         LinkedList<String> enabledLinters = new LinkedList<>();
         for (int row = 0; row < lintersTable.getRowCount(); row++){
             if ((boolean) lintersTable.getValueAt(row, 0)) {
-                enabledLinters.add((String) lintersTable.getValueAt(row, 1));
+                String linter = (String) lintersTable.getValueAt(row, 1);
+                int idx = linter.indexOf(' ');
+                if (idx > 0)
+                    linter = linter.substring(0, idx);
+                enabledLinters.add(linter);
             }
         }
 
@@ -319,7 +325,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     //----------------------------- ActionListeners -----------------------------
     // I don't know why but this ActionListener fire 3 times every selection
-    private synchronized void linterSelected(ActionEvent e) {
+    private void linterSelected() {
         if (selectedLinter == null || !selectedLinter.equals(linterComboBox.getSelectedItem())) {
             selectedLinter = (String) linterComboBox.getSelectedItem();
             if (!GoLinterConfig.INSTANCE.getGoLinterExe().equals(linterComboBox.getSelectedItem()))
@@ -328,7 +334,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         }
     }
 
-    private void linterChoosed(ActionEvent e) {
+    private void linterChoosed() {
         FileChooserDescriptor fileChooserDescriptor = new FileChooserDescriptor(true, false, false, false, false, false);
 
         if (SystemInfo.isWindows) {
@@ -369,7 +375,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         UIUtil.dispose(messageLabel);
     }
 
-    private void goGet(ActionEvent e) {
+    private void goGet() {
         try {
             ProgressManager.getInstance().runProcessWithProgressSynchronously(() -> {
                 ProgressIndicator progressIndicator = ProgressManager.getInstance().getProgressIndicator();
@@ -394,8 +400,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                 arguments.add("github.com/golangci/golangci-lint/cmd/golangci-lint");
 
                 RunProcessResult result = ProcessWrapper.INSTANCE.fetchProcessOutput(
-                    ProcessWrapper.INSTANCE.createProcessWithArguments(arguments, null),
-                    200, p -> progressIndicator.isCanceled());
+                        new ProcessBuilder(arguments).start(), 200, p -> progressIndicator.isCanceled());
 
                 if (result.component1() != 0) {
                     throw new Exception("Failed to get golangci-lint");
@@ -425,13 +430,13 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         }
     }
 
-    private void useCustomOptionsChecked(ActionEvent e) {
+    private void useCustomOptionsChecked() {
         boolean selected = useCustomOptionsCheckBox.isSelected();
         customOptionsField.setEnabled(selected);
         modified = true;
     }
 
-    private void useConfigFileChecked(ActionEvent e) {
+    private void useConfigFileChecked() {
         boolean selected = useConfigFileCheckBox.isSelected();
         configFileHintLabel.setVisible(selected);
         lintersTable.setEnabled(!selected);

@@ -1,53 +1,55 @@
 package com.ypwang.plugin
 
+import com.ypwang.plugin.model.GoLinter
 import com.ypwang.plugin.util.Log
 import com.ypwang.plugin.util.ProcessWrapper
 
 class GoSupportedLinters private constructor(private val exec: String) {
-    // (linter, description)
-    val defaultEnabledLinters: List<Pair<String, String>>
-    val defaultDisabledLinters: List<Pair<String, String>>
+    val Linters: List<GoLinter>
 
     init {
-        val (enabled, disabled) =
-            try {
-                val result = ProcessWrapper.runWithArguments(listOf(exec, "linters"))
-                if (result.returnCode != 0)
-                    throw Exception("Execution failed")
+        val linters = mutableListOf<GoLinter>()
+        try {
+            val result = ProcessWrapper.fetchProcessOutput(ProcessBuilder(listOf(exec, "linters")).start())
+            if (result.returnCode != 0)
+                throw Exception("Execution failed")
 
-                val linterRaw = result.stdout.lines()
+            val linterRaw = result.stdout.lines()
 
-                // parse output
-                val enabledLinters = mutableListOf<Pair<String, String>>()
-                val disabledLinters = mutableListOf<Pair<String, String>>()
-
-                var enabled = true
-                for (line in linterRaw) {
-                    if (line.isEmpty()) continue
-                    if (line.startsWith("Enabled")) {
-                        enabled = true
-                        continue
-                    }
-                    if (line.startsWith("Disabled")) {
-                        enabled = false
-                        continue
-                    }
-
-                    val firstColon = line.indexOfFirst { it == ':' }
-                    if (firstColon != -1) {
-                        (if (enabled) enabledLinters else disabledLinters).add(line.substring(0, firstColon) to line.substring(firstColon + 2))
-
-                    }
+            // format: name[ (aka)]: description [fast: bool, auto-fix: bool]
+            val regex = Regex("""(?<name>\w+)( \((?<aka>[\w, ]+)\))?\: (?<description>.+) \[fast\: (?<fast>true|false), auto-fix\: (?<autofix>true|false)]""")
+            // parse output
+            var enabled = true
+            for (line in linterRaw) {
+                if (line.isEmpty()) continue
+                if (line.startsWith("Enabled")) {
+                    enabled = true
+                    continue
+                }
+                if (line.startsWith("Disabled")) {
+                    enabled = false
+                    continue
                 }
 
-                enabledLinters to disabledLinters
-            } catch (e: Exception) {
-                Log.goLinter.error("Cannot get linters from $exec")
-                listOf<Pair<String, String>>() to listOf<Pair<String, String>>()
+                // use regex is a bit slow
+                regex.matchEntire(line)?.let {
+                    linters.add(
+                        GoLinter(
+                            enabled,
+                            it.groups["name"]!!.value,
+                            it.groups["aka"]?.value?:"",
+                            it.groups["description"]!!.value,
+                            it.groups["fast"]!!.value.toBoolean(),
+                            it.groups["autofix"]!!.value.toBoolean())
+                    )
+                }
             }
 
-        defaultEnabledLinters = enabled
-        defaultDisabledLinters = disabled
+        } catch (e: Exception) {
+            Log.goLinter.error("Cannot get linters from $exec")
+        }
+
+        Linters = linters
     }
 
     companion object {

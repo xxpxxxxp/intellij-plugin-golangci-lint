@@ -13,13 +13,6 @@ interface ProcessInterruptAction {
 }
 
 object ProcessWrapper {
-    fun createProcessWithArguments(arguments: List<String>, workingDir: String? = null): Process {
-        Log.goLinter.info("Execute parameter: ${ arguments.joinToString(" ") }")
-        val pb = ProcessBuilder(arguments)
-        if (workingDir != null) pb.directory(File(workingDir))
-        return pb.start()
-    }
-
     fun fetchProcessOutput(process: Process, timeoutInMillisec: Long = 0L, cancelAction: ProcessInterruptAction? = null): RunProcessResult {
         val outputConsumer = ByteArrayOutputStream()
         val outputThread = OutputReader.fetch(process.inputStream, outputConsumer)
@@ -51,9 +44,6 @@ object ProcessWrapper {
 
         return RunProcessResult(-1, "", "")
     }
-
-    fun runWithArguments(arguments: List<String>, workingDir: String? = null): RunProcessResult
-        = fetchProcessOutput(createProcessWithArguments(arguments, workingDir))
 }
 
 private class OutputReader(val inputStream: InputStream, val consumer: ByteArrayOutputStream) : Runnable {
