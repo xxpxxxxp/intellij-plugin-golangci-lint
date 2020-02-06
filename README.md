@@ -10,3 +10,6 @@ A lot of code pieces copied from [clion-clangtidy](https://bitbucket.org/baldur/
 * Fix bugs (a lot bugs...)
 * Test on Windows (I'm developing on Mac, linux should be OK)
 * Write test cases
+
+##
+Thanks guys. I finally got some free time and I plan to publish this plugin to alpha testing phase in 1 week. Really appreciated your feedbacks, please report issue here if you run into any trouble. Please kindly note down your platform (windows/linux/mac) and Go version, and necessary steps (if any) to reproduce the bug, so that I could quickly identify the problem. Hope the plugin could be stablized before Dec.
