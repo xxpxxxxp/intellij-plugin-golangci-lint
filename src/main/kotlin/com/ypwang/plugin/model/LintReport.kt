@@ -1,5 +1,6 @@
 package com.ypwang.plugin.model
 
+// to save the crap of serialize annotation, just left them capitalize
 data class Position (
     val Filename: String,
     val Offset: Int,

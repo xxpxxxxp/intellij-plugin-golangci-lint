@@ -1,23 +1,21 @@
 package com.ypwang.plugin
 
 import com.ypwang.plugin.model.GoLinter
-import com.ypwang.plugin.util.Log
-import com.ypwang.plugin.util.ProcessWrapper
 
 class GoSupportedLinters private constructor(private val exec: String) {
-    val Linters: List<GoLinter>
+    val linters: List<GoLinter>
 
     init {
         val linters = mutableListOf<GoLinter>()
         try {
-            val result = ProcessWrapper.fetchProcessOutput(ProcessBuilder(listOf(exec, "linters")).start())
+            val result = fetchProcessOutput(ProcessBuilder(listOf(exec, "linters")).start())
             if (result.returnCode != 0)
                 throw Exception("Execution failed")
 
             val linterRaw = result.stdout.lines()
 
             // format: name[ (aka)]: description [fast: bool, auto-fix: bool]
-            val regex = Regex("""(?<name>\w+)( \((?<aka>[\w, ]+)\))?\: (?<description>.+) \[fast\: (?<fast>true|false), auto-fix\: (?<autofix>true|false)]""")
+            val regex = Regex("""(?<name>\w+)( \((?<aka>[\w, ]+)\))?: (?<description>.+) \[fast: (?<fast>true|false), auto-fix: (?<autofix>true|false)]""")
             // parse output
             var enabled = true
             for (line in linterRaw) {
@@ -46,13 +44,14 @@ class GoSupportedLinters private constructor(private val exec: String) {
             }
 
         } catch (e: Exception) {
-            Log.goLinter.error("Cannot get linters from $exec")
+            logger.error("Cannot get linters from $exec")
         }
 
-        Linters = linters
+        this.linters = linters
     }
 
     companion object {
+        // simple cache
         private var goSupportedLinters: GoSupportedLinters? = null
         fun getInstance(exec: String): GoSupportedLinters {
             if (goSupportedLinters?.exec != exec) goSupportedLinters = GoSupportedLinters(exec)

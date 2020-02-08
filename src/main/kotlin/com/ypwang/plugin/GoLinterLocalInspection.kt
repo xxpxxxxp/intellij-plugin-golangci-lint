@@ -12,17 +12,16 @@ import com.intellij.notification.NotificationListener
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.options.ShowSettingsUtil
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiFile
 import com.ypwang.plugin.form.GoLinterSettings
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.model.LintReport
-import com.ypwang.plugin.util.GoLinterNotificationGroup
-import com.ypwang.plugin.util.Log
-import com.ypwang.plugin.util.ProcessWrapper
-import com.ypwang.plugin.util.RunProcessResult
+import com.ypwang.plugin.model.RunProcessResult
 import java.io.File
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.Executors
 import java.util.concurrent.locks.Condition
@@ -57,7 +56,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
 
             if (head != null) {
                 // executing
-                head!!.result = ProcessWrapper.fetchProcessOutput(ProcessBuilder(head!!.processParameters).apply {
+                head!!.result = fetchProcessOutput(ProcessBuilder(head!!.processParameters).apply {
                     val curEnv = this.environment()
                     head!!.env.forEach{ kv -> curEnv[kv.key] = kv.value }
                     this.directory(File(head!!.runningPath))
@@ -71,6 +70,35 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         // running cache
         private val cache = mutableMapOf<String, Pair<Long, List<LintIssue>>>()     // cache targetPath <> (timestamp, issues)
 
+        fun findCustomConfig(project: Project): String {
+            val basePath: String? = project.basePath
+            if (basePath != null) {
+                var cur: Path? = Paths.get(basePath)
+                while (cur != null && cur.toFile().isDirectory) {
+                    for (s in arrayOf(".golangci.yml", ".golangci.toml", ".golangci.json")) {
+                        val f = cur.resolve(s).toFile()
+                        if (f.exists() && f.isFile) { // found an valid config file
+                            return f.path
+                        }
+                    }
+                    cur = cur.parent
+                }
+            }
+
+            return ""
+        }
+
+        private var useCustomConfig: Boolean = false
+        private var timestamp = Long.MIN_VALUE
+        private fun useCustomConfig(project: Project): Boolean {
+            // cache the result max 10s
+            if (timestamp + 10000 < System.currentTimeMillis()) {
+                useCustomConfig = findCustomConfig(project).isNotEmpty()
+                timestamp = System.currentTimeMillis()
+            }
+
+            return useCustomConfig
+        }
 //        fun isSaved(file: PsiFile): Boolean {
 //            val virtualFile = file.virtualFile
 //            return FileDocumentManager.getInstance().getCachedDocument(virtualFile)?.let {
@@ -94,7 +122,8 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                     // Text not match, file is modified
                     break
 
-                lineStart += issue.Pos.Column - 1
+                lineStart += issue.Pos.Column
+                if (issue.Pos.Column > 0) lineStart--       // hack
                 if (lineStart >= lineEnd) break
 
                 rst.add(manager.createProblemDescriptor(
@@ -141,18 +170,31 @@ class GoLinterLocalInspection : LocalInspectionTool() {
 
         // build parameters
         val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
-        if (GoLinterConfig.useCustomOptions) {
-            parameters.addAll(GoLinterConfig.customOptions)
+        val provides = mutableSetOf<String>()
+
+        if (GoLinterConfig.customOptions != null) {
+            parameters.add(GoLinterConfig.customOptions!!)
+            provides.addAll(GoLinterConfig.customOptions!!.split(" "));
         }
 
         // don't use to much CPU
-        if (!parameters.contains("--concurrency")) {
+        if (!provides.contains("--concurrency")) {
             parameters.add("--concurrency")
             parameters.add(maxOf(1, (Runtime.getRuntime().availableProcessors() + 3) / 4).toString())   // at least 1 thread
         }
 
+        if (!provides.contains("--max-issues-per-linter")) {
+            parameters.add("--max-issues-per-linter")
+            parameters.add("0")
+        }
+
+        if (!provides.contains("--max-same-issues")) {
+            parameters.add("--max-same-issues")
+            parameters.add("0")
+        }
+
         // user customized linters
-        if (!GoLinterConfig.useConfigFile && GoLinterConfig.enabledLinters != null) {
+        if (useCustomConfig(manager.project) && GoLinterConfig.enabledLinters != null) {
             parameters.add("--disable-all")
             parameters.add("-E")
             parameters.add(GoLinterConfig.enabledLinters!!.joinToString(",") { it.split(' ').first() })
@@ -190,10 +232,10 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 return matchAndShow(parsed, matchName)
             } else {
                 // linter run error
-                Log.goLinter.error("Run error: ${processResult.stderr}")
+                logger.error("Run error: ${processResult.stderr}")
 
                 if (showError) {
-                    val notification = GoLinterNotificationGroup.instance
+                    val notification = notificationGroup
                             .createNotification("Go linter parameters error", "golangci-lint parameters is wrongly configured", NotificationType.ERROR, null as NotificationListener?)
 
                     notification.addAction(NotificationAction.createSimple("Configure") {
@@ -201,7 +243,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                         notification.expire()
                     })
 
-                    notification.addAction(NotificationAction.createSimple("Don't show") {
+                    notification.addAction(NotificationAction.createSimple("Do not show again") {
                         showError = false
                         notification.expire()
                     })

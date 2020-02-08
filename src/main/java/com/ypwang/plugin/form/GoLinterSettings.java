@@ -1,6 +1,5 @@
 package com.ypwang.plugin.form;
 
-import com.goide.sdk.GoSdkService;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileChooser.FileChooser;
@@ -22,12 +21,12 @@ import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
+import com.intellij.ui.components.labels.LinkLabel;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.*;
 import com.ypwang.plugin.*;
 import com.ypwang.plugin.model.GoLinter;
-import com.ypwang.plugin.util.Log;
-import com.ypwang.plugin.util.RunProcessResult;
+import kotlin.Unit;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -36,23 +35,23 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.File;
+import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.List;
-
-import com.ypwang.plugin.util.ProcessWrapper;
+import java.util.stream.Collectors;
 
 public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private JPanel settingPanel;
-    private JComboBox linterComboBox;
+    private JComboBox<String> linterComboBox;
     private JButton linterChooseButton;
     private JButton goGetButton;
     private JCheckBox useCustomOptionsCheckBox;
     private JTextField customOptionsField;
-    private JCheckBox useConfigFileCheckBox;
     private JLabel configFileHintLabel;
     private JPanel linterSelectPanel;
+    private JLabel helpLabel;
     private AsyncProcessIcon.Big refreshProcessIcon;
     private JTable lintersTable;
 
@@ -66,82 +65,25 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         curProject = project;
 
         linterComboBox.addActionListener(e -> linterSelected());
-        linterChooseButton.addActionListener(e -> linterChoosed());
+        linterChooseButton.addActionListener(e -> linterChoose());
         goGetButton.addActionListener(e -> goGet());
         useCustomOptionsCheckBox.addActionListener(e -> useCustomOptionsChecked());
-        useConfigFileCheckBox.addActionListener(e -> useConfigFileChecked());
-    }
-
-    private void setLinterExecutables(String selected) {
-        HashSet<String> items;
-
-        if (!selected.isEmpty() && !lintersInPath.contains(selected)) {
-            //noinspection unchecked
-            items = (HashSet<String>) lintersInPath.clone();
-            items.add(selected);
-        } else items = lintersInPath;
-
-        DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>(items.toArray(new String[0]));
-        linterComboBox.setModel(model);
-
-        if (!selected.isEmpty()) linterComboBox.setSelectedItem(selected);
-        // trigger table change
-        else {
-            linterComboBox.setSelectedIndex(-1);
-        }
-    }
-
-    private synchronized void refreshLinterTable() {
-        CardLayout cl = (CardLayout) linterSelectPanel.getLayout();
-        refreshProcessIcon.resume();
-        cl.show(linterSelectPanel, "refreshProcessIcon");
-
-        ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            if (linterComboBox.getSelectedItem() != null) {
-                DefaultTableModel model = (DefaultTableModel)lintersTable.getModel();
-                model.setRowCount(0);
-
-                String selected = linterComboBox.getSelectedItem().toString();
-                if (Paths.get(selected).toFile().canExecute()) {
-                    List<GoLinter> allLinters = GoSupportedLinters.Companion.getInstance(selected).getLinters();
-
-                    Map<String, String> enabledLinters = new HashMap<>();
-                    String[] enabledLintersInConfig = GoLinterConfig.INSTANCE.getEnabledLinters();
-                    if (enabledLintersInConfig != null) {
-                        for (String linter : enabledLintersInConfig) {
-                            enabledLinters.put(linter, "");
-                        }
-                    } else {
-                        for (GoLinter l : allLinters) {
-                            if (l.getDefaultEnabled()) {
-                                enabledLinters.put(l.getName(), "");
-                            }
-                        }
-                    }
-
-                    for (GoLinter linter : allLinters) {
-                        model.addRow(new Object[]{
-                                enabledLinters.containsKey(linter.getName()),
-                                linter.getFullName(),
-                                linter.getDescription()
-                        });
-                    }
-                }
-            }
-
-            cl.show(linterSelectPanel, "lintersTable");
-            refreshProcessIcon.suspend();
-        });
     }
 
     private void createUIComponents() {
         // initialize components
-        linterComboBox = new ComboBox();
+        linterComboBox = new ComboBox<>();
         goGetButton = new JButton();
         useCustomOptionsCheckBox = new JCheckBox();
         customOptionsField = new JTextField();
-        configFileHintLabel = new JLabel();
-        useConfigFileCheckBox = new JCheckBox();
+        configFileHintLabel = new JLabel("To use custom config, put the conf file in project directory");
+        helpLabel = new LinkLabel<String>(null, null, (aSource, aLinkData) -> {
+            try {
+                Desktop.getDesktop().browse(new URL("https://github.com/golangci/golangci-lint#config-file").toURI());
+            } catch (Exception e) {
+                // ignore
+            }
+        });
         linterSelectPanel = new JPanel(new CardLayout());
         lintersTable = new JBTable();
         refreshProcessIcon = new AsyncProcessIcon.Big("progress");
@@ -191,40 +133,98 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
             }
         });
 
-        lintersInPath = new HashSet<>();
-        // find if there's golangci-lint in system path
-        String systemPath = System.getenv("PATH");
-        if (systemPath != null) {
-            String[] paths = systemPath.split(File.pathSeparator);
+        lintersInPath = getLinterFromPath();
 
-            for (String path : paths) {
-                Path fullPath = Paths.get(path, PlatformSettings.INSTANCE.getLinterExecutableName());
-                if (fullPath.toFile().canExecute()) {
-                    lintersInPath.add(fullPath.toString());
+        String configFile = GoLinterLocalInspection.Companion.findCustomConfig(curProject);
+        if (!configFile.isEmpty()) {
+            // found an valid config file
+            UIUtil.dispose(configFileHintLabel);
+            configFileHintLabel = new LinkLabel<String>(
+                    String.format("Using %s", configFile), null, (aSource, aLinkData) -> {
+                try {
+                    Desktop.getDesktop().edit(new File(configFile));
+                } catch (Exception e) {
+                    // ignore
                 }
-            }
+            });
+            lintersTable.setEnabled(false);
         }
-
-        HashSet<String> lintersInGoPath = refreshLinterFromGoPath();
-        lintersInPath.addAll(lintersInGoPath);
-
-        // go get is only enabled if there's no golangci-lint in GOPATH
-        if (!lintersInGoPath.isEmpty()) goGetButton.setEnabled(false);
     }
 
-    // return path of golangci-lint in GOPATH
-    private HashSet<String> refreshLinterFromGoPath() {
-        String goPath = System.getenv("GOPATH");
-        HashSet<String> rst = new HashSet<>();
+    private void setLinterExecutables(String selected) {
+        HashSet<String> items;
 
-        if (goPath != null) {
-            for (String path: goPath.split(File.pathSeparator)) {
-                Path fullPath = Paths.get(path, "bin", PlatformSettings.INSTANCE.getLinterExecutableName());
+        if (!selected.isEmpty() && !lintersInPath.contains(selected)) {
+            //noinspection unchecked
+            items = (HashSet<String>) lintersInPath.clone();
+            items.add(selected);
+        } else items = lintersInPath;
+
+        DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>(items.toArray(new String[0]));
+        linterComboBox.setModel(model);
+
+        if (!selected.isEmpty())
+            linterComboBox.setSelectedItem(selected);
+        else
+            linterComboBox.setSelectedIndex(-1);    // trigger table change
+    }
+
+    // refresh {@link lintersTable} with selected item of {@link linterComboBox}
+    private synchronized void refreshLinterTable() {
+        CardLayout cl = (CardLayout) linterSelectPanel.getLayout();
+        refreshProcessIcon.resume();
+        cl.show(linterSelectPanel, "refreshProcessIcon");
+
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            if (linterComboBox.getSelectedItem() != null) {
+                DefaultTableModel model = (DefaultTableModel) lintersTable.getModel();
+                model.setRowCount(0);
+
+                String selected = (String) linterComboBox.getSelectedItem();
+                if (new File(selected).canExecute()) {
+                    List<GoLinter> allLinters = GoSupportedLinters.Companion.getInstance(selected).getLinters();
+
+                    Set<String> enabledLinters;
+                    String[] enabledLintersInConfig = GoLinterConfig.INSTANCE.getEnabledLinters();
+                    if (enabledLintersInConfig != null)
+                        // previously selected linters
+                        enabledLinters = Arrays.stream(enabledLintersInConfig).collect(Collectors.toSet());
+                    else
+                        // default enabled linters
+                        enabledLinters = allLinters.stream().filter(GoLinter::getDefaultEnabled).map(GoLinter::getName).collect(Collectors.toSet());
+
+                    for (GoLinter linter : allLinters) {
+                        model.addRow(new Object[]{
+                                enabledLinters.contains(linter.getName()),
+                                linter.getFullName(),
+                                linter.getDescription()
+                        });
+                    }
+                }
+            }
+
+            cl.show(linterSelectPanel, "lintersTable");
+            refreshProcessIcon.suspend();
+        });
+    }
+
+    // return path of golangci-lint in PATH
+    private HashSet<String> getLinterFromPath() {
+        HashSet<String> rst = new HashSet<>();
+        String pathStr = System.getenv("PATH");
+        if (pathStr != null) {
+            Set<String> paths = new HashSet<>(Arrays.asList(pathStr.split(File.pathSeparator)));
+            // special case: downloaded previously by this plugin
+            paths.add(UtilitiesKt.getExecutionDir());
+
+            for (String path : paths) {
+                Path fullPath = Paths.get(path, UtilitiesKt.getLinterExecutableName());
                 if (fullPath.toFile().canExecute()) {
                     rst.add(fullPath.toString());
                 }
             }
         }
+
         return rst;
     }
 
@@ -236,7 +236,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     }
 
     @Override
-    public String getDisplayName(){
+    public String getDisplayName() {
         return "Go Linter";
     }
 
@@ -252,11 +252,10 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
             GoLinterConfig.INSTANCE.setGoLinterExe((String) linterComboBox.getSelectedItem());
         }
         GoLinterConfig.INSTANCE.setUseCustomOptions(useCustomOptionsCheckBox.isSelected());
-        GoLinterConfig.INSTANCE.setCustomOptions(customOptionsField.getText().split(" "));
-        GoLinterConfig.INSTANCE.setUseConfigFile(useConfigFileCheckBox.isSelected());
+        GoLinterConfig.INSTANCE.setCustomOptions(customOptionsField.getText());
 
         LinkedList<String> enabledLinters = new LinkedList<>();
-        for (int row = 0; row < lintersTable.getRowCount(); row++){
+        for (int row = 0; row < lintersTable.getRowCount(); row++) {
             if ((boolean) lintersTable.getValueAt(row, 0)) {
                 String linter = (String) lintersTable.getValueAt(row, 1);
                 int idx = linter.indexOf(' ');
@@ -283,17 +282,18 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     @Override
     public void reset() {
-        modified = false;
-
         setLinterExecutables(GoLinterConfig.INSTANCE.getGoLinterExe());
+        refreshLinterTable();
 
-        customOptionsField.setText(String.join(" ", GoLinterConfig.INSTANCE.getCustomOptions()));
+        String t = "";
+        if (GoLinterConfig.INSTANCE.getCustomOptions() != null)
+            t = GoLinterConfig.INSTANCE.getCustomOptions();
+        customOptionsField.setText(t);
+
         useCustomOptionsCheckBox.setSelected(GoLinterConfig.INSTANCE.getUseCustomOptions());
         customOptionsField.setEnabled(GoLinterConfig.INSTANCE.getUseCustomOptions());
 
-        useConfigFileCheckBox.setSelected(GoLinterConfig.INSTANCE.getUseConfigFile());
-        configFileHintLabel.setVisible(GoLinterConfig.INSTANCE.getUseConfigFile());
-        lintersTable.setEnabled(!GoLinterConfig.INSTANCE.getUseConfigFile());
+        modified = false;
     }
 
     @Override
@@ -307,8 +307,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         UIUtil.dispose(this.goGetButton);
         UIUtil.dispose(this.useCustomOptionsCheckBox);
         UIUtil.dispose(this.customOptionsField);
-        UIUtil.dispose(this.useConfigFileCheckBox);
         UIUtil.dispose(this.configFileHintLabel);
+        UIUtil.dispose(this.helpLabel);
         UIUtil.dispose(this.linterSelectPanel);
         UIUtil.dispose(this.refreshProcessIcon);
         UIUtil.dispose(this.lintersTable);
@@ -316,8 +316,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         this.goGetButton = null;
         this.useCustomOptionsCheckBox = null;
         this.customOptionsField = null;
-        this.useConfigFileCheckBox = null;
         this.configFileHintLabel = null;
+        this.helpLabel = null;
         this.linterSelectPanel = null;
         this.refreshProcessIcon = null;
         this.lintersTable = null;
@@ -334,7 +334,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         }
     }
 
-    private void linterChoosed() {
+    private void linterChoose() {
         FileChooserDescriptor fileChooserDescriptor = new FileChooserDescriptor(true, false, false, false, false, false);
 
         if (SystemInfo.isWindows) {
@@ -353,6 +353,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                 curSelected);
 
         if (file != null) {
+            // because `file.getPath()` returns linux path, seems wired on windows
             String systemPath = Paths.get(file.getPath()).toString();
             if (curSelected == null || !systemPath.equals(curSelected.getPath()))
                 modified = true;
@@ -364,7 +365,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private void showDialog(String title, String message) {
         JLabel messageLabel = new JBLabel(message,
                 new ImageIcon(new ImageIcon(this.getClass().getResource("/images/mouse.png")).getImage().getScaledInstance(60, 60, Image.SCALE_SMOOTH)),
-                JBLabel.HORIZONTAL);
+                SwingConstants.HORIZONTAL);
         messageLabel.setBorder(JBUI.Borders.empty(10));
         messageLabel.setIconTextGap(20);
         DialogBuilder builder = new DialogBuilder(settingPanel).title(title).centerPanel(messageLabel).resizable(false);
@@ -377,69 +378,30 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     private void goGet() {
         try {
-            ProgressManager.getInstance().runProcessWithProgressSynchronously(() -> {
+            setLinterExecutables(ProgressManager.getInstance().runProcessWithProgressSynchronously(() -> {
                 ProgressIndicator progressIndicator = ProgressManager.getInstance().getProgressIndicator();
-
-                String goRoot = GoSdkService.getInstance(curProject).getSdk(null).getHomePath();
-                Log.INSTANCE.getGoLinter().info("GOROOT is " + goRoot);
-
-                if (goRoot.isEmpty()) {
-                    throw new Exception("Please set GOROOT in Go plugin");
-                }
-
-                String goExecutablePath = goRoot + "/bin/" + PlatformSettings.INSTANCE.getGoExecutableName();
-                if (!new File(goExecutablePath).isFile()) {
-                    throw new Exception("Cannot find Go executable in GOROOT");
-                }
-
-                progressIndicator.setIndeterminate(true);
-                List<String> arguments = new LinkedList<>();
-                arguments.add(goExecutablePath);
-                arguments.add("get");
-                arguments.add("-u");
-                arguments.add("github.com/golangci/golangci-lint/cmd/golangci-lint");
-
-                RunProcessResult result = ProcessWrapper.INSTANCE.fetchProcessOutput(
-                        new ProcessBuilder(arguments).start(), 200, p -> progressIndicator.isCanceled());
-
-                if (result.component1() != 0) {
-                    throw new Exception("Failed to get golangci-lint");
-                }
-
-                return true;
-            }, "Go Get From Github", true, curProject);
+                return UtilitiesKt.fetchLatestGoLinter(
+                        (String s) -> {
+                            progressIndicator.setText(s);
+                            return Unit.INSTANCE;
+                        },
+                        (Double f) -> {
+                            progressIndicator.setFraction(f);
+                            return Unit.INSTANCE;
+                        },
+                        progressIndicator::isCanceled);
+            }, "Get Latest Release", true, curProject));
+            modified = true;
         } catch (ProcessCanceledException ex) {
-            Log.INSTANCE.getGoLinter().info("go get golangci-lint cancelled");
+            UtilitiesKt.getLogger().info("get latest golangci-lint cancelled");
         } catch (Exception ex) {
-            showDialog("go get golangci-lint", ex.getMessage());
-        }
-
-        HashSet<String> lintersInGoPath = refreshLinterFromGoPath();
-        lintersInPath.addAll(lintersInGoPath);
-        if (!lintersInGoPath.isEmpty()) {
-            goGetButton.setEnabled(false);
-            String path = lintersInGoPath.iterator().next();
-            boolean sameAsSelected = path.equals(linterComboBox.getSelectedItem());
-            setLinterExecutables(path);
-
-            // If the go get path is previously selected, we need to manually refresh the table
-            // Because re-select it won't trigger fire select event
-            if (sameAsSelected) {
-                refreshLinterTable();
-            }
+            showDialog("Failed to get latest release", ex.getMessage());
         }
     }
 
     private void useCustomOptionsChecked() {
         boolean selected = useCustomOptionsCheckBox.isSelected();
         customOptionsField.setEnabled(selected);
-        modified = true;
-    }
-
-    private void useConfigFileChecked() {
-        boolean selected = useConfigFileCheckBox.isSelected();
-        configFileHintLabel.setVisible(selected);
-        lintersTable.setEnabled(!selected);
         modified = true;
     }
 }
@@ -455,7 +417,7 @@ class FileExistCellRender extends DefaultListCellRenderer {
         else {
             String path = val.toString();
             setText(path);
-            if (new File(path).isFile()) setForeground(JBColor.BLACK);
+            if (new File(path).canExecute()) setForeground(JBColor.BLACK);
             else setForeground(JBColor.RED);
         }
         return this;

@@ -1,14 +1,14 @@
 package com.ypwang.plugin.model
 
 data class GoLinter (
-    val DefaultEnabled: Boolean,
-    val Name: String,
-    val Aka: String,
-    val Description: String,
-    val Fast: Boolean,
-    val AutoFix: Boolean
+        val defaultEnabled: Boolean,
+        val name: String,
+        val aka: String,
+        val description: String,
+        val fast: Boolean,
+        val autoFix: Boolean
 ) {
-    val FullName by lazy {
-        if (Aka.isEmpty()) Name else "$Name ($Aka)"
+    val fullName by lazy {
+        if (aka.isEmpty()) name else "$name ($aka)"
     }
 }
