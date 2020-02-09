@@ -232,7 +232,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 return matchAndShow(parsed, matchName)
             } else {
                 // linter run error
-                logger.error("Run error: ${processResult.stderr}")
+                logger.error("Run error: ${processResult.stderr}. Usually it's caused by wrongly configured parameters or corrupted with config file.")
 
                 if (showError) {
                     val notification = notificationGroup
