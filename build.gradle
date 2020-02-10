@@ -5,7 +5,7 @@ plugins {
 }
 
 group 'com.ypwang.plugin'
-version '1.0.0'
+version '1.1.0'
 
 sourceCompatibility = 1.8
 
@@ -20,7 +20,7 @@ repositories {
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    compileOnly "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
 }
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
@@ -39,9 +39,9 @@ compileTestKotlin {
 patchPluginXml {
     changeNotes """
 <p>
-  <b>Version 1.0.0</b><br/>
+  <b>Version $version</b><br/>
   <ul>
-    <li>Initial plugin release version</li>
+    <li>Major bug fix</li>
   </ul>
 </p>"""
 }

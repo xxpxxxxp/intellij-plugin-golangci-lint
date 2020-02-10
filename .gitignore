@@ -1,4 +1,4 @@
-// Intellij cache
+# Intellij cache
 .idea
 .gradle
 build/

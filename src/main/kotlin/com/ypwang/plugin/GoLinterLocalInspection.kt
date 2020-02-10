@@ -90,7 +90,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
 
         private var useCustomConfig: Boolean = false
         private var timestamp = Long.MIN_VALUE
-        private fun useCustomConfig(project: Project): Boolean {
+        private fun customConfigDetected(project: Project): Boolean {
             // cache the result max 10s
             if (timestamp + 10000 < System.currentTimeMillis()) {
                 useCustomConfig = findCustomConfig(project).isNotEmpty()
@@ -149,7 +149,8 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             val lastModifyTimestamp = absolutePath.toFile().lastModified()
             // see if cached
             synchronized(cache) {
-                if (module in cache && lastModifyTimestamp < cache[module]!!.first) {
+                // cached result is newer than both last config saved time and this file's last modified time
+                if (module in cache && GoLinterSettings.getLastSavedTime() < cache[module]!!.first && lastModifyTimestamp < cache[module]!!.first) {
                     issues = cache[module]!!.second
                 }
             }
@@ -172,9 +173,9 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
         val provides = mutableSetOf<String>()
 
-        if (GoLinterConfig.customOptions != null) {
-            parameters.add(GoLinterConfig.customOptions!!)
-            provides.addAll(GoLinterConfig.customOptions!!.split(" "));
+        if (GoLinterConfig.customOptions.isEmpty()) {
+            parameters.add(GoLinterConfig.customOptions)
+            provides.addAll(GoLinterConfig.customOptions.split(" "))
         }
 
         // don't use to much CPU
@@ -193,8 +194,8 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             parameters.add("0")
         }
 
-        // user customized linters
-        if (useCustomConfig(manager.project) && GoLinterConfig.enabledLinters != null) {
+        // didn't find config in project root, nor the user selected use config file
+        if ((!customConfigDetected(manager.project) || !GoLinterConfig.useConfigFile) && GoLinterConfig.enabledLinters != null) {
             parameters.add("--disable-all")
             parameters.add("-E")
             parameters.add(GoLinterConfig.enabledLinters!!.joinToString(",") { it.split(' ').first() })
@@ -221,6 +222,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         executor.execute { run() }
         // wait for worker done the job or been preempted
         workLoad.condition.await()
+        workLoad.mutex.unlock()
 
         if (workLoad.result != null) {
             val processResult = workLoad.result!!
@@ -229,14 +231,20 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 synchronized(cache) {
                     cache[module] = now to parsed
                 }
+
                 return matchAndShow(parsed, matchName)
             } else {
                 // linter run error
                 logger.error("Run error: ${processResult.stderr}. Usually it's caused by wrongly configured parameters or corrupted with config file.")
 
                 if (showError) {
+                    val notificationMsg =
+                            if (processResult.stderr.contains("error computing diff"))
+                                "diff is needed for running gofmt/goimports. Either put GNU diff & GNU LibIconv binary in PATH, or disable gofmt/goimports."
+                            else
+                                "golangci-lint parameters is wrongly configured"
                     val notification = notificationGroup
-                            .createNotification("Go linter parameters error", "golangci-lint parameters is wrongly configured", NotificationType.ERROR, null as NotificationListener?)
+                            .createNotification("Go linter running error", notificationMsg, NotificationType.ERROR, null as NotificationListener?)
 
                     notification.addAction(NotificationAction.createSimple("Configure") {
                         ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
@@ -252,8 +260,6 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 }
             }
         }
-
-        workLoad.mutex.unlock()
 
         // or skip current run
         return null
