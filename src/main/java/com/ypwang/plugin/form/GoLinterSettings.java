@@ -148,7 +148,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
         lintersInPath = getLinterFromPath();
 
-        String configFile = GoLinterLocalInspection.Companion.findCustomConfig(curProject);
+        String configFile = GoLinterLocalInspection.Companion.findCustomConfigInPath(curProject.getBasePath());
         if (!configFile.isEmpty()) {
             // found an valid config file
             configFileHintLabel = new LinkLabel<String>(
@@ -169,10 +169,10 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         }
     }
 
-    private void setLinterExecutables(String selected) {
+    private void setLinterExecutables(@NotNull String selected) {
         HashSet<String> items;
 
-        if (!selected.isEmpty() && !lintersInPath.contains(selected)) {
+        if (!lintersInPath.contains(selected)) {
             //noinspection unchecked
             items = (HashSet<String>) lintersInPath.clone();
             items.add(selected);
@@ -180,12 +180,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
         DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>(items.toArray(new String[0]));
         linterComboBox.setModel(model);
-
-        if (!selected.isEmpty())
-            linterComboBox.setSelectedItem(selected);
-        else {
-            linterComboBox.setSelectedIndex(-1);    // trigger table change
-        }
+        linterComboBox.setSelectedItem(selected);
     }
 
     // refresh {@link lintersTable} with selected item of {@link linterComboBox}

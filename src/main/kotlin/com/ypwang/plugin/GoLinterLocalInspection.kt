@@ -11,9 +11,11 @@ import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationListener
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiFile
 import com.ypwang.plugin.form.GoLinterSettings
@@ -35,6 +37,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
 
     companion object {
         private var showError = true
+        private const val ErrorTitle = "Go linter running error"
         private val systemGoPath = System.getenv("GOPATH")      // immutable in current idea process
 
         // consumer queue
@@ -59,7 +62,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                     // executing
                     head.result = fetchProcessOutput(ProcessBuilder(head.processParameters).apply {
                         val curEnv = this.environment()
-                        head.env.forEach{ kv -> curEnv[kv.key] = kv.value }
+                        head.env.forEach { kv -> curEnv[kv.key] = kv.value }
                         this.directory(File(head.runningPath))
                     }.start())
                     head.mutex.lock()
@@ -72,12 +75,12 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         // running cache
         private val cache = mutableMapOf<String, Pair<Long, List<LintIssue>>>()     // cache targetPath <> (timestamp, issues)
 
-        fun findCustomConfig(project: Project): String {
-            val basePath: String? = project.basePath
-            if (basePath != null) {
-                var cur: Path? = Paths.get(basePath)
+        fun findCustomConfigInPath(path: String?): String {
+            val varPath: String? = path
+            if (varPath != null) {
+                var cur: Path? = Paths.get(varPath)
                 while (cur != null && cur.toFile().isDirectory) {
-                    for (s in arrayOf(".golangci.yml", ".golangci.toml", ".golangci.json")) {
+                    for (s in arrayOf(".golangci.json", ".golangci.toml", ".golangci.yml")) {
                         val f = cur.resolve(s).toFile()
                         if (f.exists() && f.isFile) { // found an valid config file
                             return f.path
@@ -95,7 +98,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         private fun customConfigDetected(project: Project): Boolean {
             // cache the result max 10s
             if (timestamp + 10000 < System.currentTimeMillis()) {
-                useCustomConfig = findCustomConfig(project).isNotEmpty()
+                useCustomConfig = findCustomConfigInPath(project.basePath).isNotEmpty()
                 timestamp = System.currentTimeMillis()
             }
 
@@ -121,7 +124,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 var lineStart = document.getLineStartOffset(lineNumber)
                 val lineEnd = document.getLineEndOffset(lineNumber)
                 if (issue.SourceLines.first() != document.getText(TextRange.create(lineStart, lineEnd)))
-                    // Text not match, file is modified
+                // Text not match, file is modified
                     break
 
                 lineStart += issue.Pos.Column
@@ -169,7 +172,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         val goPluginSettings = GoProjectLibrariesService.getInstance(manager.project)
         val goPaths =
                 (if (goPluginSettings.isUseGoPathFromSystemEnvironment && systemGoPath != null) systemGoPath + File.pathSeparator else "") +
-                        goPluginSettings.state.urls.map{ Paths.get(VirtualFileManager.extractPath(it)) }.joinToString(File.pathSeparator)
+                        goPluginSettings.state.urls.map { Paths.get(VirtualFileManager.extractPath(it)) }.joinToString(File.pathSeparator)
 
         // build parameters
         val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
@@ -237,21 +240,52 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 return matchAndShow(parsed, matchName)
             } else {
                 // linter run error
-                logger.error("Run error: ${processResult.stderr}. Usually it's caused by wrongly configured parameters or corrupted with config file.")
+                logger.warn("Run error: ${processResult.stderr}. Usually it's caused by wrongly configured parameters or corrupted with config file.")
 
                 if (showError) {
-                    val notificationMsg =
-                            if (processResult.stderr.contains("error computing diff"))
-                                "diff is needed for running gofmt/goimports. Either put GNU diff & GNU LibIconv binary in PATH, or disable gofmt/goimports."
-                            else
-                                "golangci-lint parameters is wrongly configured"
-                    val notification = notificationGroup
-                            .createNotification("Go linter running error", notificationMsg, NotificationType.ERROR, null as NotificationListener?)
-
-                    notification.addAction(NotificationAction.createSimple("Configure") {
-                        ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
-                        notification.expire()
-                    })
+                    val notification = when {
+                        processResult.stderr.contains("error computing diff") -> {
+                            notificationGroup.createNotification(
+                                    ErrorTitle,
+                                    "diff is needed for running gofmt/goimports. Either put GNU diff & GNU LibIconv binary in PATH, or disable gofmt/goimports.",
+                                    NotificationType.ERROR,
+                                    null as NotificationListener?).apply {
+                                this.addAction(NotificationAction.createSimple("Configure") {
+                                    ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
+                                    this.expire()
+                                })
+                            }
+                        }
+                        processResult.stderr.contains("Can't read config") -> {
+                            notificationGroup.createNotification(
+                                    ErrorTitle,
+                                    "invalid format of config file",
+                                    NotificationType.ERROR,
+                                    null as NotificationListener?).apply {
+                                // find the config file
+                                val configFilePath = findCustomConfigInPath(module)
+                                val configFile = File(configFilePath)
+                                if (configFile.exists()) {
+                                    this.addAction(NotificationAction.createSimple("Open ${configFile.name}") {
+                                        OpenFileDescriptor(manager.project, LocalFileSystem.getInstance().findFileByIoFile(configFile)!!).navigate(true)
+                                        this.expire()
+                                    })
+                                }
+                            }
+                        }
+                        else -> {
+                            notificationGroup.createNotification(
+                                    ErrorTitle,
+                                    "Possibly invalid config or syntax error",
+                                    NotificationType.ERROR,
+                                    null as NotificationListener?).apply {
+                                this.addAction(NotificationAction.createSimple("Configure") {
+                                    ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
+                                    this.expire()
+                                })
+                            }
+                        }
+                    }
 
                     notification.addAction(NotificationAction.createSimple("Do not show again") {
                         showError = false
