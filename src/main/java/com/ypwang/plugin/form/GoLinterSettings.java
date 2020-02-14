@@ -183,8 +183,9 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
         if (!selected.isEmpty())
             linterComboBox.setSelectedItem(selected);
-        else
-            linterComboBox.setSelectedIndex(0);    // trigger table change
+        else {
+            linterComboBox.setSelectedIndex(-1);    // trigger table change
+        }
     }
 
     // refresh {@link lintersTable} with selected item of {@link linterComboBox}

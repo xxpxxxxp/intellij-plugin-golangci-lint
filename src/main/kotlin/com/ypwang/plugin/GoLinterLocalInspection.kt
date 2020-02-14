@@ -23,7 +23,6 @@ import com.ypwang.plugin.model.RunProcessResult
 import java.io.File
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.util.concurrent.Executors
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.ReentrantLock
 
@@ -39,32 +38,35 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         private val systemGoPath = System.getenv("GOPATH")      // immutable in current idea process
 
         // consumer queue
+        private val mutex = ReentrantLock()
+        private val condition: Condition = mutex.newCondition()
         private val workLoads = sortedMapOf<String, GoLinterWorkLoad>()
-        // a singleton thread to execute go-linter, to avoid multiple instance drain out CPU
-        private val executor = Executors.newSingleThreadExecutor()
 
-        private fun run() {
-            var head: GoLinterWorkLoad? = null
-            synchronized(workLoads) {
-                // pop LIFO
-                if (workLoads.isNotEmpty()) {
-                    val key = workLoads.firstKey()
-                    head = workLoads[key]
+        init {
+            // a singleton thread to execute go-linter, to avoid multiple instance drain out CPU
+            Thread {
+                while (true) {
+                    mutex.lock()
+                    if (workLoads.isEmpty())
+                        condition.await()
+
+                    // pop LIFO
+                    val key = workLoads.lastKey()
+                    val head = workLoads[key]!!
                     workLoads.remove(key)
-                }
-            }
+                    mutex.unlock()
 
-            if (head != null) {
-                // executing
-                head!!.result = fetchProcessOutput(ProcessBuilder(head!!.processParameters).apply {
-                    val curEnv = this.environment()
-                    head!!.env.forEach{ kv -> curEnv[kv.key] = kv.value }
-                    this.directory(File(head!!.runningPath))
-                }.start())
-                head!!.mutex.lock()
-                head!!.condition.signal()
-                head!!.mutex.unlock()
-            }
+                    // executing
+                    head.result = fetchProcessOutput(ProcessBuilder(head.processParameters).apply {
+                        val curEnv = this.environment()
+                        head.env.forEach{ kv -> curEnv[kv.key] = kv.value }
+                        this.directory(File(head.runningPath))
+                    }.start())
+                    head.mutex.lock()
+                    head.condition.signal()
+                    head.mutex.unlock()
+                }
+            }.start()
         }
 
         // running cache
@@ -206,20 +208,20 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         val workLoad = GoLinterWorkLoad(module, parameters, mapOf("GOPATH" to goPaths))
         workLoad.mutex.lock()
 
-        synchronized(workLoads) {
-            val that = workLoads[module]
-            if (that != null) {
-                // newer is better, preempt old one
-                workLoads.remove(module)
-                that.mutex.lock()
-                that.condition.signal()
-                that.mutex.unlock()
-            }
-
-            workLoads[module] = workLoad
+        mutex.lock()
+        val that = workLoads[module]
+        if (that != null) {
+            // newer is better, preempt old one
+            workLoads.remove(module)
+            that.mutex.lock()
+            that.condition.signal()
+            that.mutex.unlock()
         }
 
-        executor.execute { run() }
+        workLoads[module] = workLoad
+        condition.signal()
+        mutex.unlock()
+
         // wait for worker done the job or been preempted
         workLoad.condition.await()
         workLoad.mutex.unlock()

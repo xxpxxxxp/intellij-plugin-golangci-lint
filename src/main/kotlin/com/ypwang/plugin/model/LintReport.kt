@@ -8,12 +8,24 @@ data class Position (
     val Column: Int
 )
 
+data class InlineFix (
+    val StartCol: Int, // zero-based
+    val Length: Int, // length of chunk to be replaced
+    val NewString: String
+)
+
+data class Replacement (
+    val NeedOnlyDelete: Boolean,
+    val NewLines: List<String>?,
+    val Inline: InlineFix?
+)
+
 data class LintIssue (
     val FromLinter: String,
     val Text: String,
     val Pos: Position,
     val SourceLines: List<String>,
-    val Replacement: String?
+    val Replacement: Replacement?
 )
 
 data class Linter (
