@@ -25,55 +25,14 @@ import com.ypwang.plugin.model.RunProcessResult
 import java.io.File
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.ReentrantLock
 
 class GoLinterLocalInspection : LocalInspectionTool() {
-    private class GoLinterWorkLoad(val runningPath: String, val processParameters: List<String>, val env: Map<String, String>) {
-        val mutex = ReentrantLock()
-        val condition: Condition = mutex.newCondition()
-        var result: RunProcessResult? = null
-    }
-
     companion object {
-        private var showError = true
         private const val ErrorTitle = "Go linter running error"
-        private val systemGoPath = System.getenv("GOPATH")      // immutable in current idea process
-
-        // consumer queue
-        private val mutex = ReentrantLock()
-        private val condition: Condition = mutex.newCondition()
-        private val workLoads = sortedMapOf<String, GoLinterWorkLoad>()
-
-        init {
-            // a singleton thread to execute go-linter, to avoid multiple instance drain out CPU
-            Thread {
-                while (true) {
-                    mutex.lock()
-                    if (workLoads.isEmpty())
-                        condition.await()
-
-                    // pop LIFO
-                    val key = workLoads.lastKey()
-                    val head = workLoads[key]!!
-                    workLoads.remove(key)
-                    mutex.unlock()
-
-                    // executing
-                    head.result = fetchProcessOutput(ProcessBuilder(head.processParameters).apply {
-                        val curEnv = this.environment()
-                        head.env.forEach { kv -> curEnv[kv.key] = kv.value }
-                        this.directory(File(head.runningPath))
-                    }.start())
-                    head.mutex.lock()
-                    head.condition.signal()
-                    head.mutex.unlock()
-                }
-            }.start()
-        }
-
-        // running cache
-        private val cache = mutableMapOf<String, Pair<Long, List<LintIssue>>>()     // cache targetPath <> (timestamp, issues)
+        private const val notificationFrequencyCap = 60 * 1000L
 
         fun findCustomConfigInPath(path: String?): String {
             val varPath: String? = path
@@ -92,26 +51,66 @@ class GoLinterLocalInspection : LocalInspectionTool() {
 
             return ""
         }
+    }
 
-        private var useCustomConfig: Boolean = false
-        private var timestamp = Long.MIN_VALUE
-        private fun customConfigDetected(project: Project): Boolean {
-            // cache the result max 10s
-            if (timestamp + 10000 < System.currentTimeMillis()) {
-                useCustomConfig = findCustomConfigInPath(project.basePath).isNotEmpty()
-                timestamp = System.currentTimeMillis()
+    private class GoLinterWorkLoad(val runningPath: String, val processParameters: List<String>, val env: Map<String, String>) {
+        val mutex = ReentrantLock()
+        val condition: Condition = mutex.newCondition()
+        var result: RunProcessResult? = null
+    }
+
+    private val systemGoPath = System.getenv("GOPATH")      // immutable in current idea process
+    private var showError = true
+    private val notificationLastTime = AtomicLong(-1L)
+
+    // consumer queue
+    private val mutex = ReentrantLock()
+    private val condition: Condition = mutex.newCondition()
+    private val workLoads = sortedMapOf<String, GoLinterWorkLoad>()
+
+    // cache module <> (timestamp, issues)
+    private val cache = mutableMapOf<String, Pair<Long, List<LintIssue>?>>()
+
+    init {
+        // a singleton thread to execute go-linter, to avoid multiple instances drain out CPU
+        Thread {
+            while (true) {
+                mutex.lock()
+                if (workLoads.isEmpty())
+                    condition.await()
+
+                // pop LIFO
+                val key = workLoads.lastKey()
+                val head = workLoads[key]!!
+                workLoads.remove(key)
+                mutex.unlock()
+
+                // executing
+                head.result = fetchProcessOutput(ProcessBuilder(head.processParameters).apply {
+                    val curEnv = this.environment()
+                    head.env.forEach { kv -> curEnv[kv.key] = kv.value }
+                    this.directory(File(head.runningPath))
+                }.start())
+                head.mutex.lock()
+                head.condition.signal()
+                head.mutex.unlock()
+            }
+        }.start()
+    }
+
+    private var customConfigFound: Boolean = false
+    private var customConfigLastCheckTime = Long.MIN_VALUE
+
+    private fun customConfigDetected(project: Project): Boolean =
+        // cache the result max 10s
+        System.currentTimeMillis().let {
+            if (customConfigLastCheckTime + 10000 < it) {
+                customConfigFound = findCustomConfigInPath(project.basePath).isNotEmpty()
+                customConfigLastCheckTime = it
             }
 
-            return useCustomConfig
+            customConfigFound
         }
-//        fun isSaved(file: PsiFile): Boolean {
-//            val virtualFile = file.virtualFile
-//            return FileDocumentManager.getInstance().getCachedDocument(virtualFile)?.let {
-//                val fileEditorManager = FileEditorManager.getInstance(file.project)
-//                !fileEditorManager.isFileOpen(virtualFile) || fileEditorManager.getEditors(virtualFile).all { !it.isModified }
-//            } ?: false
-//        }
-    }
 
     override fun checkFile(file: PsiFile, manager: InspectionManager, isOnTheFly: Boolean): Array<ProblemDescriptor>? {
         fun matchAndShow(issues: List<LintIssue>, matchName: String): Array<ProblemDescriptor>? {
@@ -123,8 +122,8 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 val lineNumber = issue.Pos.Line - 1
                 var lineStart = document.getLineStartOffset(lineNumber)
                 val lineEnd = document.getLineEndOffset(lineNumber)
-                if (issue.SourceLines.first() != document.getText(TextRange.create(lineStart, lineEnd)))
-                // Text not match, file is modified
+                if (issue.SourceLines.firstOrNull() != document.getText(TextRange.create(lineStart, lineEnd)))
+                    // Text not match, file is modified
                     break
 
                 lineStart += issue.Pos.Column
@@ -207,7 +206,6 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         }
         parameters.add(".")
 
-        val now = System.currentTimeMillis()
         val workLoad = GoLinterWorkLoad(module, parameters, mapOf("GOPATH" to goPaths))
         workLoad.mutex.lock()
 
@@ -229,70 +227,77 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         workLoad.condition.await()
         workLoad.mutex.unlock()
 
+        val now = System.currentTimeMillis()
         if (workLoad.result != null) {
             val processResult = workLoad.result!!
-            if (processResult.returnCode == 1) {    // default exit code is 1
-                val parsed = Gson().fromJson(processResult.stdout, LintReport::class.java).Issues
-                synchronized(cache) {
-                    cache[module] = now to parsed
+            when (processResult.returnCode) {
+                // 0: no hint found; 1: hint found
+                0, 1 -> {
+                    val parsed = Gson().fromJson(processResult.stdout, LintReport::class.java).Issues
+                    synchronized(cache) {
+                        cache[module] = now to parsed
+                    }
+
+                    return parsed?.let { matchAndShow(it, matchName) }
                 }
+                // run error
+                else -> {
+                    logger.warn("Run error: ${processResult.stderr}. Usually it's caused by wrongly configured parameters or corrupted with config file.")
 
-                return matchAndShow(parsed, matchName)
-            } else {
-                // linter run error
-                logger.warn("Run error: ${processResult.stderr}. Usually it's caused by wrongly configured parameters or corrupted with config file.")
-
-                if (showError) {
-                    val notification = when {
-                        processResult.stderr.contains("error computing diff") -> {
-                            notificationGroup.createNotification(
-                                    ErrorTitle,
-                                    "diff is needed for running gofmt/goimports. Either put GNU diff & GNU LibIconv binary in PATH, or disable gofmt/goimports.",
-                                    NotificationType.ERROR,
-                                    null as NotificationListener?).apply {
-                                this.addAction(NotificationAction.createSimple("Configure") {
-                                    ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
-                                    this.expire()
-                                })
+                    // freq cap 1min
+                    if (showError && (notificationLastTime.get() + notificationFrequencyCap) < now) {
+                        val notification = when {
+                            processResult.stderr.contains("error computing diff") -> {
+                                notificationGroup.createNotification(
+                                        ErrorTitle,
+                                        "diff is needed for running gofmt/goimports. Either put GNU diff & GNU LibIconv binary in PATH, or disable gofmt/goimports.",
+                                        NotificationType.ERROR,
+                                        null as NotificationListener?).apply {
+                                    this.addAction(NotificationAction.createSimple("Configure") {
+                                        ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
+                                        this.expire()
+                                    })
+                                }
                             }
-                        }
-                        processResult.stderr.contains("Can't read config") -> {
-                            notificationGroup.createNotification(
-                                    ErrorTitle,
-                                    "invalid format of config file",
-                                    NotificationType.ERROR,
-                                    null as NotificationListener?).apply {
-                                // find the config file
-                                val configFilePath = findCustomConfigInPath(module)
-                                val configFile = File(configFilePath)
-                                if (configFile.exists()) {
-                                    this.addAction(NotificationAction.createSimple("Open ${configFile.name}") {
-                                        OpenFileDescriptor(manager.project, LocalFileSystem.getInstance().findFileByIoFile(configFile)!!).navigate(true)
+                            processResult.stderr.contains("Can't read config") -> {
+                                notificationGroup.createNotification(
+                                        ErrorTitle,
+                                        "invalid format of config file",
+                                        NotificationType.ERROR,
+                                        null as NotificationListener?).apply {
+                                    // find the config file
+                                    val configFilePath = findCustomConfigInPath(module)
+                                    val configFile = File(configFilePath)
+                                    if (configFile.exists()) {
+                                        this.addAction(NotificationAction.createSimple("Open ${configFile.name}") {
+                                            OpenFileDescriptor(manager.project, LocalFileSystem.getInstance().findFileByIoFile(configFile)!!).navigate(true)
+                                            this.expire()
+                                        })
+                                    }
+                                }
+                            }
+                            else -> {
+                                notificationGroup.createNotification(
+                                        ErrorTitle,
+                                        "Possibly invalid config or syntax error",
+                                        NotificationType.ERROR,
+                                        null as NotificationListener?).apply {
+                                    this.addAction(NotificationAction.createSimple("Configure") {
+                                        ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
                                         this.expire()
                                     })
                                 }
                             }
                         }
-                        else -> {
-                            notificationGroup.createNotification(
-                                    ErrorTitle,
-                                    "Possibly invalid config or syntax error",
-                                    NotificationType.ERROR,
-                                    null as NotificationListener?).apply {
-                                this.addAction(NotificationAction.createSimple("Configure") {
-                                    ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
-                                    this.expire()
-                                })
-                            }
-                        }
+
+                        notification.addAction(NotificationAction.createSimple("Do not show again") {
+                            showError = false
+                            notification.expire()
+                        })
+
+                        notification.notify(manager.project)
+                        notificationLastTime.set(now)
                     }
-
-                    notification.addAction(NotificationAction.createSimple("Do not show again") {
-                        showError = false
-                        notification.expire()
-                    })
-
-                    notification.notify(manager.project)
                 }
             }
         }

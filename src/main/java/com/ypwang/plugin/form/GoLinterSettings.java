@@ -385,7 +385,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     private void showDialog(String title, String message) {
         JLabel messageLabel = new JBLabel(message,
-                new ImageIcon(new ImageIcon(this.getClass().getResource("/images/mouse.png")).getImage().getScaledInstance(60, 60, Image.SCALE_SMOOTH)),
+                new ImageIcon(new ImageIcon(this.getClass().getResource("/images/mole.png")).getImage().getScaledInstance(60, 60, Image.SCALE_SMOOTH)),
                 SwingConstants.HORIZONTAL);
         messageLabel.setBorder(JBUI.Borders.empty(10));
         messageLabel.setIconTextGap(20);

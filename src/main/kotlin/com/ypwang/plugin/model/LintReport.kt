@@ -10,7 +10,7 @@ data class Position (
 
 data class InlineFix (
     val StartCol: Int, // zero-based
-    val Length: Int, // length of chunk to be replaced
+    val Length: Int,   // length of chunk to be replaced
     val NewString: String
 )
 
@@ -39,6 +39,6 @@ data class Linters (
 )
 
 data class LintReport (
-    val Issues: List<LintIssue>,
+    val Issues: List<LintIssue>?,
     val Report: Linters
 )
