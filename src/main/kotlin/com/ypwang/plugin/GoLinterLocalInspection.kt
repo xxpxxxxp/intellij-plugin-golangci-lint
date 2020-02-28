@@ -5,10 +5,7 @@ import com.goide.project.GoProjectLibrariesService
 import com.goide.psi.GoFile
 import com.goide.sdk.GoSdkService
 import com.google.gson.Gson
-import com.intellij.codeInspection.InspectionManager
-import com.intellij.codeInspection.LocalInspectionTool
-import com.intellij.codeInspection.ProblemDescriptor
-import com.intellij.codeInspection.ProblemHighlightType
+import com.intellij.codeInspection.*
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationListener
 import com.intellij.notification.NotificationType
@@ -138,7 +135,9 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                         TextRange.create(lineStart, lineEnd),
                         "${issue.Text} (${issue.FromLinter})",
                         ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
-                        isOnTheFly
+                        isOnTheFly,
+                        // experimental: try to auto-fix the problem
+                        *(quickFixHandler.getOrDefault(issue.FromLinter, defaultHandler).invoke(manager.project, file, issue))
                 ))
             }
 
@@ -175,7 +174,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         // IDE's take precedence
         val goPluginSettings = GoProjectLibrariesService.getInstance(manager.project)
         val goPaths = goPluginSettings.state.urls.map { Paths.get(VirtualFileManager.extractPath(it)) }.joinToString(File.pathSeparator) +
-                (if (goPluginSettings.isUseGoPathFromSystemEnvironment && systemGoPath != null) systemGoPath + File.pathSeparator else "")
+                (if (goPluginSettings.isUseGoPathFromSystemEnvironment && systemGoPath != null) File.pathSeparator + systemGoPath else "")
 
         val goExecutable = GoSdkService.getInstance(manager.project).getSdk(null).goExecutablePath
         var envPath = systemPath

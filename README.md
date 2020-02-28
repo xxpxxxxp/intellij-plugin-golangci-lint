@@ -11,9 +11,7 @@ A lot of code pieces copied from [clion-clangtidy](https://bitbucket.org/baldur/
 * If the plugin reports an error, please copy-paste the error content
 
 ## What's next
-* Fix bugs (a lot bugs...)
-* Test on Windows (I'm developing on Mac, linux should be OK)
-* Write test cases
+* Working on auto-fix
 
 ####
 ![code for food](https://i.imgur.com/ZY9Jwp3.jpg) @Seattle
