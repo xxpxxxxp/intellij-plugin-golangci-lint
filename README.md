@@ -1,8 +1,8 @@
-# Intellij Golang Linter Inspection Plugin
+# Intellij/Golang Linter Inspection Plugin
 
 Write code, write better code
 
-All credit goes to [GolangCI-Lint](https://github.com/golangci/golangci-lint).
+All credit goes to [GolangCI-Lint authors](https://github.com/golangci/golangci-lint).
 
 A lot of code pieces copied from [clion-clangtidy](https://bitbucket.org/baldur/clion-clangtidy/src/default/), [kotlin](https://github.com/JetBrains/kotlin), and [Goland plugin](https://plugins.jetbrains.com/plugin/9568-go) itself.
 
@@ -16,7 +16,4 @@ A lot of code pieces copied from [clion-clangtidy](https://bitbucket.org/baldur/
 * Write test cases
 
 ####
-Finally got some time because of the quarantine of current coronavirus break. I swear I'll start beta test this week.
-
-
 ![code for food](https://i.imgur.com/ZY9Jwp3.jpg) @Seattle

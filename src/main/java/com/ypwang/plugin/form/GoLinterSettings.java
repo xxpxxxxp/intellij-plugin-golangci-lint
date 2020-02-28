@@ -70,6 +70,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private boolean modified = false;
     private HashSet<String> lintersInPath;
     private Project curProject;
+    private String linterPathSelected;
 
     public GoLinterSettings(@NotNull Project project) {
         curProject = project;
@@ -300,12 +301,12 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     @Override
     public void reset() {
-        if (GoLinterConfig.INSTANCE.getGoLinterExe().equals(linterComboBox.getSelectedItem()))
-            // get rid of enabled / disabled linters change
-            refreshLinterTable();
-        else
-            // totally refresh table
-            setLinterExecutables(GoLinterConfig.INSTANCE.getGoLinterExe());
+        linterPathSelected = GoLinterConfig.INSTANCE.getGoLinterExe();
+        if (!linterPathSelected.equals(linterComboBox.getSelectedItem()))
+            setLinterExecutables(linterPathSelected);
+
+        // force refresh to get rid of enabled / disabled linters change
+        refreshLinterTable();
 
         if (configFileHintLabel instanceof JCheckBox) {
             ((JCheckBox)configFileHintLabel).setSelected(GoLinterConfig.INSTANCE.getUseConfigFile());
@@ -348,9 +349,10 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     //----------------------------- ActionListeners -----------------------------
     private void linterSelected(ActionEvent e) {
-        if (e.getModifiers() == 0) {
+        if (!Objects.equals(linterComboBox.getSelectedItem(), linterPathSelected)) {
             // selection changed
             modified = true;
+            linterPathSelected = (String)linterComboBox.getSelectedItem();
             refreshLinterTable();
         }
     }

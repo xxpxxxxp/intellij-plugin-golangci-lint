@@ -5,14 +5,12 @@
     <vendor email="g04103582@gmail.com" url="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint">Go Linter</vendor>
 
     <description><![CDATA[
-<p>
-This plugin provides an user interface within Intellij/Goland to easily use
-golangci-lint on your project's sources.
-</p>
+<h1>Write code, write better code</h1>
+<p>This plugin provides golangci-lint inspection on-the-fly within Intellij/Goland</p>
+<h4>Like the plugin? Star me at: <a href="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint">Go Linter Plugin</a></h4>
+<h4>Got an issue? Report to: <a href="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/issues">Issue Tracker</a></h4>
 
-<p>
-<b>All credit goes to <a href="https://github.com/golangci/golangci-lint">golangci-lint authors</a></b>
-</p>
+<h3><b>All credit goes to <a href="https://github.com/golangci/golangci-lint">GolangCI-Lint authors</a></b></h3>
 
 <p>
 GolangCI-Lint is a linters aggregator. It's fast: on average 5 times faster

@@ -1,7 +1,9 @@
 package com.ypwang.plugin
 
+import com.goide.configuration.GoSdkConfigurable
 import com.goide.project.GoProjectLibrariesService
 import com.goide.psi.GoFile
+import com.goide.sdk.GoSdkService
 import com.google.gson.Gson
 import com.intellij.codeInspection.InspectionManager
 import com.intellij.codeInspection.LocalInspectionTool
@@ -59,6 +61,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         var result: RunProcessResult? = null
     }
 
+    private val systemPath = System.getenv("PATH")
     private val systemGoPath = System.getenv("GOPATH")      // immutable in current idea process
     private var showError = true
     private val notificationLastTime = AtomicLong(-1L)
@@ -165,13 +168,22 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         }
 
         // cache not found or outdated
+        // ====================================================================================================================================
+
         // try best to get GOPATH, as GoLand or Intellij's go plugin have to know the correct 'GOPATH' for inspections,
         // ful GOPATH should be: Global GOPATH + IDE project GOPATH
         // IDE's take precedence
         val goPluginSettings = GoProjectLibrariesService.getInstance(manager.project)
-        val goPaths =
-                (if (goPluginSettings.isUseGoPathFromSystemEnvironment && systemGoPath != null) systemGoPath + File.pathSeparator else "") +
-                        goPluginSettings.state.urls.map { Paths.get(VirtualFileManager.extractPath(it)) }.joinToString(File.pathSeparator)
+        val goPaths = goPluginSettings.state.urls.map { Paths.get(VirtualFileManager.extractPath(it)) }.joinToString(File.pathSeparator) +
+                (if (goPluginSettings.isUseGoPathFromSystemEnvironment && systemGoPath != null) systemGoPath + File.pathSeparator else "")
+
+        val goExecutable = GoSdkService.getInstance(manager.project).getSdk(null).goExecutablePath
+        var envPath = systemPath
+        if (goExecutable != null) {
+            val goBin = Paths.get(goExecutable).parent.toString()
+            if (!envPath.contains(goBin))
+                envPath = "$goBin${File.pathSeparator}$envPath"
+        }
 
         // build parameters
         val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
@@ -206,7 +218,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         }
         parameters.add(".")
 
-        val workLoad = GoLinterWorkLoad(module, parameters, mapOf("GOPATH" to goPaths))
+        val workLoad = GoLinterWorkLoad(module, parameters, mapOf("PATH" to envPath, "GOPATH" to goPaths))
         workLoad.mutex.lock()
 
         mutex.lock()
@@ -247,19 +259,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                     // freq cap 1min
                     if (showError && (notificationLastTime.get() + notificationFrequencyCap) < now) {
                         val notification = when {
-                            processResult.stderr.contains("error computing diff") -> {
-                                notificationGroup.createNotification(
-                                        ErrorTitle,
-                                        "diff is needed for running gofmt/goimports. Either put GNU diff & GNU LibIconv binary in PATH, or disable gofmt/goimports.",
-                                        NotificationType.ERROR,
-                                        null as NotificationListener?).apply {
-                                    this.addAction(NotificationAction.createSimple("Configure") {
-                                        ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
-                                        this.expire()
-                                    })
-                                }
-                            }
-                            processResult.stderr.contains("Can't read config") -> {
+                            processResult.stderr.contains("Can't read config") ->
                                 notificationGroup.createNotification(
                                         ErrorTitle,
                                         "invalid format of config file",
@@ -275,8 +275,40 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                                         })
                                     }
                                 }
-                            }
-                            else -> {
+                            processResult.stderr.contains("all linters were disabled, but no one linter was enabled") ->
+                                notificationGroup.createNotification(
+                                        ErrorTitle,
+                                        "must enable at least one linter",
+                                        NotificationType.ERROR,
+                                        null as NotificationListener?).apply {
+                                    this.addAction(NotificationAction.createSimple("Configure") {
+                                        ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
+                                        this.expire()
+                                    })
+                                }
+                            processResult.stderr.contains("\\\"go\\\": executable file not found in \$PATH") ->
+                                notificationGroup.createNotification(
+                                        ErrorTitle,
+                                        "'GOROOT' must be set",
+                                        NotificationType.ERROR,
+                                        null as NotificationListener?).apply {
+                                    this.addAction(NotificationAction.createSimple("Setup GOROOT") {
+                                        ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoSdkConfigurable(manager.project, true))
+                                        this.expire()
+                                    })
+                                }
+                            processResult.stderr.contains("error computing diff") ->
+                                notificationGroup.createNotification(
+                                        ErrorTitle,
+                                        "diff is needed for running gofmt/goimports. Either put GNU diff & GNU LibIconv binary in PATH, or disable gofmt/goimports.",
+                                        NotificationType.ERROR,
+                                        null as NotificationListener?).apply {
+                                    this.addAction(NotificationAction.createSimple("Configure") {
+                                        ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
+                                        this.expire()
+                                    })
+                                }
+                            else ->
                                 notificationGroup.createNotification(
                                         ErrorTitle,
                                         "Possibly invalid config or syntax error",
@@ -287,7 +319,6 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                                         this.expire()
                                     })
                                 }
-                            }
                         }
 
                         notification.addAction(NotificationAction.createSimple("Do not show again") {

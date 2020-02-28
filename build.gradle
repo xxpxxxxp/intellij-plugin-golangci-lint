@@ -5,7 +5,7 @@ plugins {
 }
 
 group 'com.ypwang.plugin'
-version '1.1.4'
+version '1.1.5'
 
 sourceCompatibility = 1.8
 
@@ -25,7 +25,7 @@ dependencies {
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-    version '2019.3.2'
+    version '2019.3.3'
     type 'IU'
     plugins 'org.jetbrains.plugins.go:193.5662.53.103'
     intellij.updateSinceUntilBuild false
@@ -41,8 +41,8 @@ patchPluginXml {
 <p>
   <b>Version $version</b><br/>
   <ul>
-    <li>Minor bug fix</li>
-    <li>Erro notice freq cap</li>
+    <li>Fix Go executable path issus</li>
+    <li>Fix linter selection</li>
   </ul>
 </p>"""
 }
