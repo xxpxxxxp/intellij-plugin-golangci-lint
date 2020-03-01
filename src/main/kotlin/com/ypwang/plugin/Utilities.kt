@@ -1,5 +1,6 @@
 package com.ypwang.plugin
 
+import com.google.common.io.CharStreams
 import com.google.gson.Gson
 import com.intellij.notification.NotificationGroup
 import com.intellij.openapi.diagnostic.Logger
@@ -7,7 +8,6 @@ import com.intellij.openapi.util.SystemInfo
 import com.ypwang.plugin.model.GithubRelease
 import com.ypwang.plugin.model.RunProcessResult
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
-import org.apache.commons.io.IOUtils
 import org.apache.http.client.methods.HttpGet
 import org.apache.http.impl.client.HttpClientBuilder
 import java.io.*
@@ -78,7 +78,7 @@ fun fetchLatestGoLinter(setText: (String) -> Unit, setFraction: (Double) -> Unit
         setText("Get latest release meta")
         val latest = Gson().fromJson(
                 httpClient.execute(HttpGet("https://api.github.com/repos/golangci/golangci-lint/releases/latest")).use { response ->
-                    IOUtils.toString(response.entity.content, Charset.defaultCharset())
+                    CharStreams.toString(InputStreamReader(response.entity.content, Charset.defaultCharset()))
                 },
                 GithubRelease::class.java)
 
