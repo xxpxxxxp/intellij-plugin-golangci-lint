@@ -20,12 +20,18 @@ data class Replacement (
     val Inline: InlineFix?
 )
 
+data class LineRange (
+    val From: Int,
+    val To: Int
+)
+
 data class LintIssue (
     val FromLinter: String,
     val Text: String,
     val Pos: Position,
-    val SourceLines: List<String>,
-    val Replacement: Replacement?
+    val SourceLines: List<String>?,
+    val Replacement: Replacement?,
+    val LineRange: LineRange?
 )
 
 data class Linter (

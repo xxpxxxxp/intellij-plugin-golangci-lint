@@ -92,7 +92,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                     this.directory(File(head.runningPath))
                 }.start())
                 head.mutex.lock()
-                head.condition.signal()
+                head.condition.signalAll()
                 head.mutex.unlock()
             }
         }.start()
@@ -122,7 +122,8 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 val lineNumber = issue.Pos.Line - 1
                 var lineStart = document.getLineStartOffset(lineNumber)
                 val lineEnd = document.getLineEndOffset(lineNumber)
-                if (issue.SourceLines.firstOrNull() != document.getText(TextRange.create(lineStart, lineEnd)))
+                if (issue.SourceLines != null       // workaround: `unused` linter doesn't report SourceLines
+                        && issue.SourceLines.firstOrNull() != document.getText(TextRange.create(lineStart, lineEnd)))
                     // Text not match, file is modified
                     break
 
@@ -130,14 +131,17 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 if (issue.Pos.Column > 0) lineStart--       // hack
                 if (lineStart >= lineEnd) break
 
-                rst.add(manager.createProblemDescriptor(
+                val handler = quickFixHandler[issue.FromLinter] ?: defaultHandler
+                val (quickFix, range) = handler.suggestFix(file, issue)
+                rst.add(
+                    manager.createProblemDescriptor(
                         file,
-                        TextRange.create(lineStart, lineEnd),
+                        if (range != null) range else TextRange.create(lineStart, lineEnd),
                         "${issue.Text} (${issue.FromLinter})",
                         ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
                         isOnTheFly,
                         // experimental: try to auto-fix the problem
-                        *(quickFixHandler.getOrDefault(issue.FromLinter, defaultHandler).invoke(manager.project, file, issue))
+                        *quickFix
                 ))
             }
 
@@ -151,18 +155,14 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         val matchName = absolutePath.fileName.toString()        // file name
 
         run {
-            var issues: List<LintIssue>? = null
-            val lastModifyTimestamp = absolutePath.toFile().lastModified()
             // see if cached
-            synchronized(cache) {
-                // cached result is newer than both last config saved time and this file's last modified time
-                if (module in cache && GoLinterSettings.getLastSavedTime() < cache[module]!!.first && lastModifyTimestamp < cache[module]!!.first) {
-                    issues = cache[module]!!.second
-                }
+            val issueWithTTL = synchronized(cache) {
+                cache[module]
             }
 
-            if (issues != null) {
-                return matchAndShow(issues!!, matchName)
+            // cached result is newer than both last config saved time and this file's last modified time
+            if (issueWithTTL != null && GoLinterSettings.getLastSavedTime() < issueWithTTL.first && absolutePath.toFile().lastModified() < issueWithTTL.first && issueWithTTL.second != null) {
+                return matchAndShow(issueWithTTL.second!!, matchName)
             }
         }
 
@@ -170,15 +170,17 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         // ====================================================================================================================================
 
         // try best to get GOPATH, as GoLand or Intellij's go plugin have to know the correct 'GOPATH' for inspections,
-        // ful GOPATH should be: Global GOPATH + IDE project GOPATH
-        // IDE's take precedence
+        // ful GOPATH should be: IDE project GOPATH + Global GOPATH
         val goPluginSettings = GoProjectLibrariesService.getInstance(manager.project)
         val goPaths = goPluginSettings.state.urls.map { Paths.get(VirtualFileManager.extractPath(it)) }.joinToString(File.pathSeparator) +
                 (if (goPluginSettings.isUseGoPathFromSystemEnvironment && systemGoPath != null) File.pathSeparator + systemGoPath else "")
 
-        val goExecutable = GoSdkService.getInstance(manager.project).getSdk(null).goExecutablePath
         var envPath = systemPath
+        val goExecutable = GoSdkService.getInstance(manager.project).getSdk(null).goExecutablePath
         if (goExecutable != null) {
+            // for Mac users: OSX is using different PATH for terminal & GUI, Intellij seems cannot inherit '/usr/local/bin' as PATH
+            // that cause problem because golangci-lint depends on `go env` to discover GOPATH (I don't know why they do this)
+            // add Go plugin's SDK path to PATH if needed in order to make golangci-lint happy
             val goBin = Paths.get(goExecutable).parent.toString()
             if (!envPath.contains(goBin))
                 envPath = "$goBin${File.pathSeparator}$envPath"
@@ -196,7 +198,8 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         // don't use to much CPU
         if (!provides.contains("--concurrency")) {
             parameters.add("--concurrency")
-            parameters.add(maxOf(1, (Runtime.getRuntime().availableProcessors() + 3) / 4).toString())   // at least 1 thread
+            // runtime should have at least 1 available processor, right?
+            parameters.add(((Runtime.getRuntime().availableProcessors() + 3) / 4).toString())
         }
 
         if (!provides.contains("--max-issues-per-linter")) {
@@ -217,24 +220,17 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         }
         parameters.add(".")
 
-        val workLoad = GoLinterWorkLoad(module, parameters, mapOf("PATH" to envPath, "GOPATH" to goPaths))
+        mutex.lock()
+        // if there's already same task in backlog, we could use it's result directly
+        // if there's not, add a new one
+        val workLoad = workLoads.getOrPut(module){ GoLinterWorkLoad(module, parameters, mapOf("PATH" to envPath, "GOPATH" to goPaths)) }
         workLoad.mutex.lock()
 
-        mutex.lock()
-        val that = workLoads[module]
-        if (that != null) {
-            // newer is better, preempt old one
-            workLoads.remove(module)
-            that.mutex.lock()
-            that.condition.signal()
-            that.mutex.unlock()
-        }
-
-        workLoads[module] = workLoad
+        // tell the worker to do the job
         condition.signal()
         mutex.unlock()
 
-        // wait for worker done the job or been preempted
+        // wait for worker done the job
         workLoad.condition.await()
         workLoad.mutex.unlock()
 
@@ -258,6 +254,9 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                     // freq cap 1min
                     if (showError && (notificationLastTime.get() + notificationFrequencyCap) < now) {
                         val notification = when {
+                            processResult.stderr.contains("buildssa: analysis skipped") || processResult.stderr.contains("typechecking error") ->
+                                // syntax error or package not found, programmer should fix that first
+                                return null
                             processResult.stderr.contains("Can't read config") ->
                                 notificationGroup.createNotification(
                                         ErrorTitle,
