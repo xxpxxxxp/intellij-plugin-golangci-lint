@@ -1,17 +1,15 @@
-name: CI
+name: BuildAndPublish
 
-on: [push]
+on: create
 
 jobs:
-  build:
-
+  build_and_publish:
+    name: build & publish
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v2
-    - name: Run a one-line script
-      run: echo Hello, world!
-    - name: Run a multi-line script
-      run: |
-        echo Add other actions to build,
-        echo test, and deploy your project.
+    - name: sole step
+      run: gradle publishPlugin
+      env:
+        ORG_GRADLE_PROJECT_intellijPublishToken: ${{ secrets.PluginUploadToken }}
