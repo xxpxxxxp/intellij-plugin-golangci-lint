@@ -7,17 +7,14 @@
     <description><![CDATA[
 <h1>Write code, write better code</h1>
 <p>This plugin provides golangci-lint inspection on-the-fly within Intellij/Goland</p>
-<h4>Like the plugin? Star me at: <a href="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint">Go Linter Plugin</a></h4>
-<h4>Got an issue? Report to: <a href="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/issues">Issue Tracker</a></h4>
-
-<h3><b>All credit goes to <a href="https://github.com/golangci/golangci-lint">GolangCI-Lint authors</a></b></h3>
-
+<h4>Like the plugin? Star me at <a href="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint">Go Linter Plugin</a></h4>
+<h4>Got an issue? Report to <a href="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/issues">Issue Tracker</a></h4>
+<h4>All credit goes to <a href="https://github.com/golangci/golangci-lint">GolangCI-Lint authors</a></h4>
 <p>
 GolangCI-Lint is a linters aggregator. It's fast: on average 5 times faster
 than gometalinter. It's easy to integrate and use, has nice output and has a
 minimum number of false positives. It supports go modules.
 </p>
-
 <p>
 When running golangci-lint, it performs a static code analysis to find some
 common issues and code style violations and provides fixes which can be applied

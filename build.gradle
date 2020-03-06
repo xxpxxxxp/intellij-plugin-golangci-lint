@@ -4,8 +4,29 @@ plugins {
     id 'org.jetbrains.kotlin.jvm' version '1.3.61'
 }
 
+static def gitTag() {
+    def tag = ""
+    def proc = "git describe --tags".execute()
+    proc.in.eachLine { line -> tag = line }
+    proc.err.eachLine { line -> println line }
+    proc.waitFor()
+
+    if (tag ==~ /v\d+\.\d+\.\d+/)
+        return [tag.substring(1), "default"]
+
+    def branch = ""
+    proc = "git rev-parse --abbrev-ref HEAD".execute()
+    proc.in.eachLine { line -> branch = line }
+    proc.err.eachLine { line -> println line }
+    proc.waitFor()
+
+    [branch, "branch"]
+}
+
+def (String ver, String channel) = gitTag()
+
 group 'com.ypwang.plugin'
-version '1.2.4'
+version ver
 
 sourceCompatibility = 1.8
 
@@ -30,19 +51,20 @@ intellij {
     plugins 'org.jetbrains.plugins.go:193.5662.53.103'
     intellij.updateSinceUntilBuild false
 }
+
 compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
+
 compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
+
 patchPluginXml {
-    changeNotes """
-<p>
-  <b>Version $version</b><br/>
-  <ul>
-    <li>Auto-fixing!</li>
-    <li>Stability improvement</li>
-  </ul>
-</p>"""
+    changeNotes new File('change-notes.htm').text
+}
+
+publishPlugin {
+    token = System.getenv("ORG_GRADLE_PROJECT_intellijPublishToken")
+    channels channel
 }
