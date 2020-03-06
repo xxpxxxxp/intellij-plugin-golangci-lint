@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: eskatos/gradle-command-action@v1
     - name: sole step
       run: gradle publishPlugin
       env:
