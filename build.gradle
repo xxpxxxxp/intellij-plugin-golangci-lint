@@ -8,7 +8,6 @@ static def gitTag() {
     def tag = ""
     def proc = "git describe --tags".execute()
     proc.in.eachLine { line -> tag = line }
-    proc.err.eachLine { line -> println line }
     proc.waitFor()
 
     if (tag ==~ /v\d+\.\d+\.\d+/)
@@ -17,7 +16,6 @@ static def gitTag() {
     def branch = ""
     proc = "git rev-parse --abbrev-ref HEAD".execute()
     proc.in.eachLine { line -> branch = line }
-    proc.err.eachLine { line -> println line }
     proc.waitFor()
 
     [branch, "branch"]

@@ -5,10 +5,14 @@ import com.goide.project.GoProjectLibrariesService
 import com.goide.psi.GoFile
 import com.goide.sdk.GoSdkService
 import com.google.gson.Gson
-import com.intellij.codeInspection.*
+import com.intellij.codeInspection.InspectionManager
+import com.intellij.codeInspection.LocalInspectionTool
+import com.intellij.codeInspection.ProblemDescriptor
+import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationListener
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.options.ShowSettingsUtil
@@ -16,6 +20,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 import com.ypwang.plugin.form.GoLinterSettings
 import com.ypwang.plugin.model.LintIssue
@@ -116,7 +121,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         fun matchAndShow(issues: List<LintIssue>, matchName: String): Array<ProblemDescriptor>? {
             val rst = mutableListOf<ProblemDescriptor>()
 
-            val document = FileDocumentManager.getInstance().getDocument(file.virtualFile)!!
+            val document = PsiDocumentManager.getInstance(manager.project).getDocument(file)!!
             for (issue in issues.filter { it.Pos.Filename == matchName }) {
                 if (issue.Pos.Line > document.lineCount) continue
                 val lineNumber = issue.Pos.Line - 1
@@ -129,14 +134,14 @@ class GoLinterLocalInspection : LocalInspectionTool() {
 
                 lineStart += issue.Pos.Column
                 if (issue.Pos.Column > 0) lineStart--       // hack
-                if (lineStart >= lineEnd) break
+                if (lineStart > lineEnd) break
 
                 val handler = quickFixHandler[issue.FromLinter] ?: defaultHandler
                 val (quickFix, range) = handler.suggestFix(file, issue)
                 rst.add(
                     manager.createProblemDescriptor(
                         file,
-                        if (range != null) range else TextRange.create(lineStart, lineEnd),
+                        range ?: TextRange.create(lineStart, lineEnd),
                         "${issue.Text} (${issue.FromLinter})",
                         ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
                         isOnTheFly,
@@ -161,8 +166,18 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             }
 
             // cached result is newer than both last config saved time and this file's last modified time
-            if (issueWithTTL != null && GoLinterSettings.getLastSavedTime() < issueWithTTL.first && absolutePath.toFile().lastModified() < issueWithTTL.first && issueWithTTL.second != null) {
+            if (issueWithTTL != null
+                    && GoLinterSettings.getLastSavedTime() < issueWithTTL.first
+                    && file.virtualFile.timeStamp < issueWithTTL.first
+                    && issueWithTTL.second != null) {
                 return matchAndShow(issueWithTTL.second!!, matchName)
+            }
+        }
+
+        // save the document, otherwise we may not taking correct content
+        ApplicationManager.getApplication().invokeLater {
+            ApplicationManager.getApplication().runWriteAction {
+                PsiDocumentManager.getInstance(manager.project).getDocument(file)?.let { FileDocumentManager.getInstance().saveDocument(it) }
             }
         }
 
@@ -220,6 +235,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         }
         parameters.add(".")
 
+        val processingTime = System.currentTimeMillis()
         mutex.lock()
         // if there's already same task in backlog, we could use it's result directly
         // if there's not, add a new one
@@ -242,7 +258,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 0, 1 -> {
                     val parsed = Gson().fromJson(processResult.stdout, LintReport::class.java).Issues
                     synchronized(cache) {
-                        cache[module] = now to parsed
+                        cache[module] = processingTime to parsed
                     }
 
                     return parsed?.let { matchAndShow(it, matchName) }

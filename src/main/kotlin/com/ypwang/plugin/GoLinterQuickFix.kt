@@ -17,21 +17,20 @@ private val nonAvailableFix = arrayOf<LocalQuickFix>() to null
 private inline fun <reified T : PsiElement> chainFindAndHandle(
         file: PsiFile,
         offset: Int,
-        default: Pair<Array<LocalQuickFix>, TextRange?>,
         handler: (T) -> Pair<Array<LocalQuickFix>, TextRange?>?
 ): Pair<Array<LocalQuickFix>, TextRange?> {
     var element = file.findElementAt(offset)
     while (element != null) {
         if (element is T)
-            return handler(element) ?: default
+            return handler(element) ?: nonAvailableFix
 
         element = element.parent
     }
 
-    return default
+    return nonAvailableFix
 }
 
-open class ProblemHandler {
+abstract class ProblemHandler {
     fun suggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> =
             try {
                 doSuggestFix(file, issue)
@@ -39,8 +38,16 @@ open class ProblemHandler {
                 nonAvailableFix
             }
 
-    open fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> =
-            chainFindAndHandle(file, issue.Pos.Offset, nonAvailableFix) { element: GoNamedElement ->
+    abstract fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?>
+}
+
+val defaultHandler = object : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> = nonAvailableFix
+}
+
+val namedElementHandler = object : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> =
+            chainFindAndHandle(file, issue.Pos.Offset) { element: GoNamedElement ->
                 when (element) {
                     is GoFieldDefinition -> {
                         val decl = element.parent
@@ -68,12 +75,10 @@ open class ProblemHandler {
                         (if (GoInspectionUtil.canDeleteDefinition(element)) arrayOf<LocalQuickFix>(GoDeleteConstDefinitionQuickFix(element.name)) else arrayOf())
 //                    is GoMethodDeclaration -> arrayOf(GoDeleteQuickFix("Delete function", GoMethodDeclaration::class.java), GoRenameToBlankQuickFix(element))
 //                    is GoLightMethodDeclaration -> arrayOf(GoDeleteQuickFix("Delete function", GoLightMethodDeclaration::class.java), GoRenameToBlankQuickFix(element))
-                    else -> nonAvailableFix.first      // TODO
+                    else -> nonAvailableFix.first
                 } to element.identifier?.textRange
             }
 }
-
-val defaultHandler = ProblemHandler()
 
 private val ineffassignHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> {
@@ -100,7 +105,7 @@ private val scopelintHandler = object : ProblemHandler() {
 
 private val interfacerHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> {
-        return chainFindAndHandle(file, issue.Pos.Offset, nonAvailableFix) { element: GoParameterDeclaration ->
+        return chainFindAndHandle(file, issue.Pos.Offset) { element: GoParameterDeclaration ->
             // last child is type signature
             arrayOf<LocalQuickFix>(GoReplaceParameterTypeFix(
                     issue.Text.substring(issue.Text.lastIndexOf(' ') + 1).trim('`'),
@@ -122,18 +127,17 @@ private val gocriticHandler = object : ProblemHandler() {
                     end = issue.Text.indexOf('`', begin + 1)
                     val replace = issue.Text.substring(begin + 1, end)
 
-                    chainFindAndHandle(file, issue.Pos.Offset, nonAvailableFix) { element: GoAssignmentStatement ->
+                    chainFindAndHandle(file, issue.Pos.Offset) { element: GoAssignmentStatement ->
                         if (element.text == currentAssignment) {
                             if (replace.endsWith("++") || replace.endsWith("--"))
                                 arrayOf<LocalQuickFix>(GoReplaceElementFix(replace, element, GoIncDecStatement::class.java)) to element.textRange
                             else
                                 arrayOf<LocalQuickFix>(GoReplaceElementFix(replace, element, GoAssignmentStatement::class.java)) to element.textRange
-                        }
-                        else null
+                        } else null
                     }
                 }
                 issue.Text.startsWith("sloppyLen:") -> {
-                    chainFindAndHandle(file, issue.Pos.Offset, nonAvailableFix) { element: GoConditionalExpr ->
+                    chainFindAndHandle(file, issue.Pos.Offset) { element: GoConditionalExpr ->
                         if (issue.Text.contains(element.text)) {
                             val searchPattern = "can be "
                             val replace = issue.Text.substring(issue.Text.indexOf(searchPattern) + searchPattern.length)
@@ -142,7 +146,7 @@ private val gocriticHandler = object : ProblemHandler() {
                     }
                 }
                 issue.Text.startsWith("unslice:") -> {
-                    chainFindAndHandle(file, issue.Pos.Offset, nonAvailableFix) { element: GoIndexOrSliceExpr ->
+                    chainFindAndHandle(file, issue.Pos.Offset) { element: GoIndexOrSliceExpr ->
                         if (issue.Text.contains(element.text) && element.expression != null)
                             arrayOf<LocalQuickFix>(GoReplaceExpressionFix(element.expression!!.text, element)) to element.textRange
                         else null
@@ -164,7 +168,7 @@ private val golintHandler = object : ProblemHandler() {
                     end = issue.Text.indexOf('`', begin + 1)
                     val newName = issue.Text.substring(begin + 1, end)
 
-                    chainFindAndHandle(file, issue.Pos.Offset, nonAvailableFix) { element: GoNamedElement ->
+                    chainFindAndHandle(file, issue.Pos.Offset) { element: GoNamedElement ->
                         if (element.text == curName)
                             arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, newName)) to element.identifier?.textRange
                         else null
@@ -177,7 +181,7 @@ private val golintHandler = object : ProblemHandler() {
 
                     begin = issue.Text.indexOf(searchPattern, begin + 1) + searchPattern.length
                     val newName = issue.Text.substring(begin, issue.Text.indexOf(' ', begin))
-                    chainFindAndHandle(file, issue.Pos.Offset, nonAvailableFix) { element: GoMethodDeclaration ->
+                    chainFindAndHandle(file, issue.Pos.Offset) { element: GoMethodDeclaration ->
                         val receiver = element.receiver
                         if (receiver != null && receiver.identifier!!.text == curName) {
                             arrayOf<LocalQuickFix>(GoRenameToQuickFix(receiver, newName)) to receiver.identifier?.textRange
@@ -186,7 +190,7 @@ private val golintHandler = object : ProblemHandler() {
                 }
                 issue.Text.startsWith("type name will be used as ") -> {
                     val newName = issue.Text.substring(issue.Text.lastIndexOf(' ') + 1)
-                    chainFindAndHandle(file, issue.Pos.Offset, nonAvailableFix) { element: GoTypeSpec ->
+                    chainFindAndHandle(file, issue.Pos.Offset) { element: GoTypeSpec ->
                         if (element.identifier.text.startsWith(element.containingFile.packageName ?: "", true))
                             arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, newName)) to element.identifier.textRange
                         else null
@@ -229,18 +233,19 @@ private val whitespaceHandler = object : ProblemHandler() {
 
 // experimental
 private val goconstHandler = object : ProblemHandler() {
-    override fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> {
-        return nonAvailableFix
-    }
+    override fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> =
+            chainFindAndHandle(file, issue.Pos.Offset) { element: GoStringLiteral ->
+                arrayOf<LocalQuickFix>(GoIntroduceConstStringLiteralFix(file as GoFile, element.text)) to element.textRange
+            }
 }
 
 // attempt to suggest auto-fix, if possible, clarify affected PsiElement for better inspection
 val quickFixHandler = mapOf(
+        "structcheck" to namedElementHandler,
+        "varcheck" to namedElementHandler,
+        "deadcode" to namedElementHandler,
+        "unused" to namedElementHandler,
         "ineffassign" to ineffassignHandler,
-        "structcheck" to defaultHandler,
-        "varcheck" to defaultHandler,
-        "deadcode" to defaultHandler,
-        "unused" to defaultHandler,
         "scopelint" to scopelintHandler,
         "gocritic" to gocriticHandler,
         "interfacer" to interfacerHandler,
