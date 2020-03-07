@@ -22,7 +22,7 @@ to your code.
 </p>
 ]]></description>
 
-    <idea-version since-build="183.*"/>
+    <idea-version since-build="193.*"/>
 
     <!-- please see http://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
          on how to target different products -->

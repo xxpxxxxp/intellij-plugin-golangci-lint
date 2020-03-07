@@ -45,7 +45,7 @@ val defaultHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> = nonAvailableFix
 }
 
-val namedElementHandler = object : ProblemHandler() {
+private val namedElementHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> =
             chainFindAndHandle(file, issue.Pos.Offset) { element: GoNamedElement ->
                 when (element) {
