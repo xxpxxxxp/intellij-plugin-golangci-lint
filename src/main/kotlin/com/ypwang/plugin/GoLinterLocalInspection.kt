@@ -14,6 +14,7 @@ import com.intellij.notification.NotificationListener
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
@@ -30,6 +31,7 @@ import java.io.File
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.ReentrantLock
 
@@ -54,6 +56,47 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             }
 
             return ""
+        }
+
+        private fun isSaved(file: PsiFile): Boolean {
+            val virtualFile = file.virtualFile
+            val document = FileDocumentManager.getInstance().getCachedDocument(virtualFile)
+
+            if (document != null) {
+                val fileEditorManager = FileEditorManager.getInstance(file.project)
+                if (fileEditorManager.isFileOpen(virtualFile)) {
+                    var saved = true
+                    val application = ApplicationManager.getApplication()
+                    val done = AtomicReference(false)       // here we use atomic variable as a spinlock
+
+                    application.invokeLater {
+                        // ideally there should be 1 editor, unless in split view
+                        for (editor in fileEditorManager.getEditors(virtualFile)) {
+                            if (editor.isModified) {
+                                saved = false
+                                break
+                            }
+                        }
+                        done.set(true)
+                    }
+
+                    val now = System.currentTimeMillis()
+                    while (!done.compareAndSet(true, false)) {
+                        // as a last resort, break the loop on timeout
+                        if (System.currentTimeMillis() - now > 1000) {
+                            // may hang for 1s, hope that never happen
+                            logger.info("Cannot get confirmation from dispatch thread, break the loop")
+                            return false
+                        }
+                    }
+
+                    return saved
+                }
+                // no editor opened, so data should be saved
+                return true
+            }
+
+            return false
         }
     }
 
@@ -165,19 +208,20 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 cache[module]
             }
 
+            if (!isSaved(file)) {
+                // don't run linter when hot editing, as that will cause typing lagged
+                // while if we have previous result, it's better than nothing to return those results
+                // issues before the editing area could still be useful
+                logger.info("Run skipped because of editing")
+                return issueWithTTL?.second?.let { matchAndShow(it, matchName) }
+            }
+
             // cached result is newer than both last config saved time and this file's last modified time
             if (issueWithTTL != null
-                    && GoLinterSettings.getLastSavedTime() < issueWithTTL.first
                     && file.virtualFile.timeStamp < issueWithTTL.first
+                    && GoLinterSettings.getLastSavedTime() < issueWithTTL.first
                     && issueWithTTL.second != null) {
                 return matchAndShow(issueWithTTL.second!!, matchName)
-            }
-        }
-
-        // save the document, otherwise we may not taking correct content
-        ApplicationManager.getApplication().invokeLater {
-            ApplicationManager.getApplication().runWriteAction {
-                PsiDocumentManager.getInstance(manager.project).getDocument(file)?.let { FileDocumentManager.getInstance().saveDocument(it) }
             }
         }
 

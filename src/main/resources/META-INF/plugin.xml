@@ -10,19 +10,12 @@
 <h4>Like the plugin? Star me at <a href="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint">Go Linter Plugin</a></h4>
 <h4>Got an issue? Report to <a href="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/issues">Issue Tracker</a></h4>
 <h4>All credit goes to <a href="https://github.com/golangci/golangci-lint">GolangCI-Lint authors</a></h4>
-<p>
-GolangCI-Lint is a linters aggregator. It's fast: on average 5 times faster
-than gometalinter. It's easy to integrate and use, has nice output and has a
-minimum number of false positives. It supports go modules.
-</p>
-<p>
-When running golangci-lint, it performs a static code analysis to find some
-common issues and code style violations and provides fixes which can be applied
-to your code.
-</p>
+<h4>Feature proposals needed: settings/autofix/suppression, everything welcome on <a href="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/issues">Issue Tracker</a></h4>
+<p>GolangCI-Lint is a linters aggregator. It's fast: on average 5 times faster than gometalinter. It's easy to integrate and use, has nice output and has a minimum number of false positives. It supports go modules.</p>
+<p>When running golangci-lint, it performs a static code analysis to find some common issues and code style violations and provides fixes which can be applied to your code.</p>
 ]]></description>
 
-    <idea-version since-build="193.*"/>
+    <idea-version since-build="193"/>
 
     <!-- please see http://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
          on how to target different products -->

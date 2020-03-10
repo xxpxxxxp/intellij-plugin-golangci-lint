@@ -46,7 +46,7 @@ dependencies {
 intellij {
     version '2019.3.3'
     type 'IU'
-    plugins 'org.jetbrains.plugins.go:193.5662.53.103'
+    plugins 'org.jetbrains.plugins.go:193.6494.35.125'
     intellij.updateSinceUntilBuild false
 }
 

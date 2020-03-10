@@ -98,21 +98,19 @@ private val ineffassignHandler = object : ProblemHandler() {
 }
 
 private val scopelintHandler = object : ProblemHandler() {
-    override fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> {
-        return arrayOf<LocalQuickFix>(GoScopeLintFakeFix()) to null
-    }
+    override fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> =
+            arrayOf<LocalQuickFix>(GoScopeLintFakeFix()) to null
 }
 
 private val interfacerHandler = object : ProblemHandler() {
-    override fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> {
-        return chainFindAndHandle(file, issue.Pos.Offset) { element: GoParameterDeclaration ->
-            // last child is type signature
-            arrayOf<LocalQuickFix>(GoReplaceParameterTypeFix(
-                    issue.Text.substring(issue.Text.lastIndexOf(' ') + 1).trim('`'),
-                    element
-            )) to element.lastChild.textRange
-        }
-    }
+    override fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> =
+            chainFindAndHandle(file, issue.Pos.Offset) { element: GoParameterDeclaration ->
+                // last child is type signature
+                arrayOf<LocalQuickFix>(GoReplaceParameterTypeFix(
+                        issue.Text.substring(issue.Text.lastIndexOf(' ') + 1).trim('`'),
+                        element
+                )) to element.lastChild.textRange
+            }
 }
 
 private val gocriticHandler = object : ProblemHandler() {
@@ -194,6 +192,17 @@ private val golintHandler = object : ProblemHandler() {
                         if (element.identifier.text.startsWith(element.containingFile.packageName ?: "", true))
                             arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, newName)) to element.identifier.textRange
                         else null
+                    }
+                }
+                issue.Text == "don't use ALL_CAPS in Go names; use CamelCase" -> {
+                    chainFindAndHandle(file, issue.Pos.Offset) { element: GoConstDefinition ->
+                        // ALL_CAPS to CamelCase
+                        val replace = element.identifier.text
+                                .split('_')
+                                .flatMap { it.withIndex().map { iv -> if (iv.index == 0) iv.value else iv.value.toLowerCase() } }
+                                .joinToString("")
+
+                        arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, replace)) to element.identifier.textRange
                     }
                 }
                 else -> nonAvailableFix
