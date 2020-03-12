@@ -185,7 +185,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                     manager.createProblemDescriptor(
                         file,
                         range ?: TextRange.create(lineStart, lineEnd),
-                        "${issue.Text} (${issue.FromLinter})",
+                        handler.description(issue),
                         ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
                         isOnTheFly,
                         // experimental: try to auto-fix the problem
@@ -231,8 +231,10 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         // try best to get GOPATH, as GoLand or Intellij's go plugin have to know the correct 'GOPATH' for inspections,
         // ful GOPATH should be: IDE project GOPATH + Global GOPATH
         val goPluginSettings = GoProjectLibrariesService.getInstance(manager.project)
-        val goPaths = goPluginSettings.state.urls.map { Paths.get(VirtualFileManager.extractPath(it)) }.joinToString(File.pathSeparator) +
-                (if (goPluginSettings.isUseGoPathFromSystemEnvironment && systemGoPath != null) File.pathSeparator + systemGoPath else "")
+        val goPaths = goPluginSettings.state.urls.map { Paths.get(VirtualFileManager.extractPath(it)).toString() }.let {
+            if (goPluginSettings.isUseGoPathFromSystemEnvironment && systemGoPath != null) it + systemGoPath
+            else it
+        }.joinToString(File.pathSeparator)
 
         var envPath = systemPath
         val goExecutable = GoSdkService.getInstance(manager.project).getSdk(null).goExecutablePath

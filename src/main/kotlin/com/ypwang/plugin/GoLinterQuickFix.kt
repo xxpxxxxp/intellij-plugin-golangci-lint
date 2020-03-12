@@ -38,6 +38,7 @@ abstract class ProblemHandler {
                 nonAvailableFix
             }
 
+    open fun description(issue: LintIssue): String = "${issue.Text} (${issue.FromLinter})"
     abstract fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?>
 }
 
@@ -134,7 +135,7 @@ private val gocriticHandler = object : ProblemHandler() {
                         } else null
                     }
                 }
-                issue.Text.startsWith("sloppyLen:") -> {
+                issue.Text.startsWith("sloppyLen:") ->
                     chainFindAndHandle(file, issue.Pos.Offset) { element: GoConditionalExpr ->
                         if (issue.Text.contains(element.text)) {
                             val searchPattern = "can be "
@@ -142,14 +143,19 @@ private val gocriticHandler = object : ProblemHandler() {
                             arrayOf<LocalQuickFix>(GoReplaceElementFix(replace, element, GoConditionalExpr::class.java)) to element.textRange
                         } else null
                     }
-                }
-                issue.Text.startsWith("unslice:") -> {
+                issue.Text.startsWith("unslice:") ->
                     chainFindAndHandle(file, issue.Pos.Offset) { element: GoIndexOrSliceExpr ->
                         if (issue.Text.contains(element.text) && element.expression != null)
                             arrayOf<LocalQuickFix>(GoReplaceExpressionFix(element.expression!!.text, element)) to element.textRange
                         else null
                     }
-                }
+                issue.Text.startsWith("captLocal:") ->
+                    chainFindAndHandle(file, issue.Pos.Offset) { element: GoParamDefinition ->
+                        val text = element.identifier.text
+                        if (text[0].isUpperCase())
+                            arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, text[0].toLowerCase() + text.substring(1))) to element.identifier.textRange
+                        else null
+                    }
                 else -> nonAvailableFix
             }
 }
@@ -194,7 +200,7 @@ private val golintHandler = object : ProblemHandler() {
                         else null
                     }
                 }
-                issue.Text == "don't use ALL_CAPS in Go names; use CamelCase" -> {
+                issue.Text == "don't use ALL_CAPS in Go names; use CamelCase" ->
                     chainFindAndHandle(file, issue.Pos.Offset) { element: GoConstDefinition ->
                         // ALL_CAPS to CamelCase
                         val replace = element.identifier.text
@@ -204,7 +210,6 @@ private val golintHandler = object : ProblemHandler() {
 
                         arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, replace)) to element.identifier.textRange
                     }
-                }
                 else -> nonAvailableFix
             }
 }

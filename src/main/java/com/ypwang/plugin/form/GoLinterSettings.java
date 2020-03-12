@@ -60,7 +60,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private JButton linterChooseButton;
     private JButton goGetButton;
     private JCheckBox useCustomOptionsCheckBox;
-    private JTextField customOptionsField;
+    private HintTextField customOptionsField;
     private JComponent configFileHintLabel;
     private JPanel linterSelectPanel;
     private JLabel helpLabel;
@@ -86,7 +86,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         linterComboBox = new ComboBox<>();
         goGetButton = new JButton();
         useCustomOptionsCheckBox = new JCheckBox();
-        customOptionsField = new JTextField();
+        customOptionsField = new HintTextField("Please be careful with parameters supplied...");
         helpLabel = new LinkLabel<String>(null, null, (aSource, aLinkData) -> {
             try {
                 Desktop.getDesktop().browse(new URL("https://github.com/golangci/golangci-lint#config-file").toURI());
@@ -445,4 +445,28 @@ class FileExistCellRender extends DefaultListCellRenderer {
         }
         return this;
     }
+}
+
+class HintTextField extends JTextField {
+    public HintTextField(String hint) {
+        _hint = hint;
+    }
+
+    @Override
+    public void paint(Graphics g) {
+        super.paint(g);
+        if (this.isEnabled() && getText().length() == 0) {
+            int h = getHeight();
+            ((Graphics2D)g).setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            Insets ins = getInsets();
+            FontMetrics fm = g.getFontMetrics();
+            int c0 = getBackground().getRGB();
+            int c1 = getForeground().getRGB();
+            int m = 0xfefefefe;
+            int c2 = ((c0 & m) >>> 1) + ((c1 & m) >>> 1);
+            g.setColor(new JBColor(new Color(c2, true), new Color(c2, true)));
+            g.drawString(_hint, ins.left, h / 2 + fm.getAscent() / 2 - 2);
+        }
+    }
+    private final String _hint;
 }

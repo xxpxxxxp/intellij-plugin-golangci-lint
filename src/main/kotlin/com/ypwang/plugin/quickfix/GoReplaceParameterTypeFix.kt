@@ -40,7 +40,7 @@ class GoReplaceParameterTypeFix(
         val shortName = packageName.substring(packageName.lastIndexOf('/') + 1)
 
         val moduleCut = shortName.indexOf('.')
-        // -1 means we are in current package, no need to import
+        // -1 means in current package / internal package, no need to import
         if (moduleCut != -1) {
             val goImport = GoImport("$pre${shortName.substring(0, moduleCut)}")
             val file = element.containingFile

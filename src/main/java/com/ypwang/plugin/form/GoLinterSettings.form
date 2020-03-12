@@ -46,7 +46,7 @@
           <text value="Custom Options"/>
         </properties>
       </component>
-      <component id="72705" class="javax.swing.JTextField" binding="customOptionsField" custom-create="true">
+      <component id="72705" class="com.ypwang.plugin.form.HintTextField" binding="customOptionsField" custom-create="true">
         <constraints>
           <grid row="1" column="1" row-span="1" col-span="3" vsize-policy="0" hsize-policy="6" anchor="8" fill="1" indent="0" use-parent-layout="false">
             <preferred-size width="150" height="-1"/>

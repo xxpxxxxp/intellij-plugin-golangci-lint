@@ -1,8 +1,14 @@
+
 # scopelint
 
-**This explanation is from [kyoh86/scopelint](https://github.com/kyoh86/scopelint) with better formatting**
+**This explanation is from [kyoh86/scopelint](https://github.com/kyoh86/scopelint) with better format**
 
-**scopelint** checks for unpinned variables in go programs.
+**scopelint** checks for unpinned variables in go programs. Although it tends to misreport a lot, it's highly recommand to check every such issue, **sometimes it'll really save your ass:**
+
+> [Let's Encrypt to revoke 3 million certificates on March 4 due to software bug](https://www.zdnet.com/article/lets-encrypt-to-revoke-3-million-certificates-on-march-4-due-to-bug/)  
+> The bug is merged into Boulder CAA code in [sa.go, line 2250](https://github.com/letsencrypt/boulder/pull/4134/files#diff-2285b0268539881fde96d9928ecef358R2250)
+
+> [一行Golang代码引发的血案](https://zhuanlan.zhihu.com/p/111639968)
 
 ## What's this?
 
