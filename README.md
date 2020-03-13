@@ -1,3 +1,5 @@
+![Publish](https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/workflows/Publish/badge.svg)
+
 # Intellij/Golang Linter Inspection Plugin
 
 Write code, write better code
