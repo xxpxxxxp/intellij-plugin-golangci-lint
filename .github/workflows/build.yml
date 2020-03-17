@@ -1,15 +1,20 @@
-name: BuildAndPublish
+name: Publish
 
 on: create
 
 jobs:
   build_and_publish:
-    name: build & publish
+    name: publish
     runs-on: ubuntu-latest
 
     steps:
+    - uses: actions/checkout@v1
+    - uses: actions/setup-java@v1
+      with:
+        java-version: 8
     - uses: eskatos/gradle-command-action@v1
-    - name: sole step
-      run: gradle publishPlugin
+      with:
+        gradle-version: current
+        arguments: publishPlugin
       env:
         ORG_GRADLE_PROJECT_intellijPublishToken: ${{ secrets.PluginUploadToken }}
