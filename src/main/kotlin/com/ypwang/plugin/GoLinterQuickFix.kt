@@ -253,6 +253,33 @@ private val goconstHandler = object : ProblemHandler() {
             }
 }
 
+private val malignedHandler = object : ProblemHandler() {
+    override fun description(issue: LintIssue): String {
+        val lineBreak = issue.Text.indexOf(":\n")
+        if (lineBreak != -1)
+            return issue.Text.substring(0, lineBreak) + " (maligned)"
+
+        return super.description(issue)
+    }
+
+    override fun doSuggestFix(file: PsiFile, issue: LintIssue): Pair<Array<LocalQuickFix>, TextRange?> {
+        val lineBreak = issue.Text.indexOf(":\n")
+        if (lineBreak != -1) {
+            return chainFindAndHandle(file, issue.Pos.Offset) { element: GoTypeDeclaration ->
+                arrayOf<LocalQuickFix>(
+                        GoReorderStructFieldFix(
+                                element.typeSpecList.first().identifier.text,
+                                issue.Text.substring(lineBreak + 2).trim('`'),
+                                element
+                        )
+                ) to element.typeSpecList.first().identifier.textRange
+            }
+        }
+
+        return nonAvailableFix
+    }
+}
+
 // attempt to suggest auto-fix, if possible, clarify affected PsiElement for better inspection
 val quickFixHandler = mapOf(
         "structcheck" to namedElementHandler,
@@ -265,5 +292,6 @@ val quickFixHandler = mapOf(
         "interfacer" to interfacerHandler,
         "whitespace" to whitespaceHandler,
         "golint" to golintHandler,
-        "goconst" to goconstHandler
+        "goconst" to goconstHandler,
+        "maligned" to malignedHandler
 )

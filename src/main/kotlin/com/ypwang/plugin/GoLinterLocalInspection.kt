@@ -273,6 +273,10 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             parameters.add("0")
         }
 
+        // TODO: this flag is deprecating, while currently there's no better way
+        if (!provides.contains("--maligned.suggest-new"))
+            parameters.add("--maligned.suggest-new")
+
         // didn't find config in project root, nor the user selected use config file
         if ((!customConfigDetected(manager.project) || !GoLinterConfig.useConfigFile) && GoLinterConfig.enabledLinters != null) {
             parameters.add("--disable-all")
@@ -302,7 +306,11 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             when (processResult.returnCode) {
                 // 0: no hint found; 1: hint found
                 0, 1 -> {
-                    val parsed = Gson().fromJson(processResult.stdout, LintReport::class.java).Issues
+                    val parsed = Gson().fromJson(
+                            // because first line will be the "--maligned.suggest-new" flag deprecation warning
+                            processResult.stdout.substring(processResult.stdout.indexOf('\n') + 1),
+                            LintReport::class.java).Issues
+
                     synchronized(cache) {
                         cache[module] = processingTime to parsed
                     }
