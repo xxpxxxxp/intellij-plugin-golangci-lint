@@ -2,6 +2,8 @@
 
 # Intellij/Golang Linter Inspection Plugin
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/50dd3264c0f74e85929d53bd780fcdfd)](https://app.codacy.com/manual/xxpxxxxp/intellij-plugin-golangci-lint?utm_source=github.com&utm_medium=referral&utm_content=xxpxxxxp/intellij-plugin-golangci-lint&utm_campaign=Badge_Grade_Dashboard)
+
 Write code, write better code
 
 All credit goes to [GolangCI-Lint authors](https://github.com/golangci/golangci-lint).
