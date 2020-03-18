@@ -1,4 +1,6 @@
-![Publish](https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/workflows/Publish/badge.svg)
+[![Publish](https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/workflows/Publish/badge.svg)](https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/actions)
+[![#Download](https://img.shields.io/jetbrains/plugin/d/12496-go-linter.svg)](https://plugins.jetbrains.com/plugin/12496-go-linter)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/50dd3264c0f74e85929d53bd780fcdfd)](https://app.codacy.com/manual/xxpxxxxp/intellij-plugin-golangci-lint?utm_source=github.com&utm_medium=referral&utm_content=xxpxxxxp/intellij-plugin-golangci-lint&utm_campaign=Badge_Grade_Dashboard)
 
 # Intellij/Golang Linter Inspection Plugin
 
