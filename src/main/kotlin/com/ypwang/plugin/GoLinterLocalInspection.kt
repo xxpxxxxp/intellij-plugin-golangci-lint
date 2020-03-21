@@ -150,50 +150,74 @@ class GoLinterLocalInspection : LocalInspectionTool() {
     private var customConfigLastCheckTime = Long.MIN_VALUE
 
     private fun customConfigDetected(project: Project): Boolean =
-        // cache the result max 10s
-        System.currentTimeMillis().let {
-            if (customConfigLastCheckTime + 10000 < it) {
-                customConfigFound = findCustomConfigInPath(project.basePath).isNotEmpty()
-                customConfigLastCheckTime = it
-            }
+            // cache the result max 10s
+            System.currentTimeMillis().let {
+                if (customConfigLastCheckTime + 10000 < it) {
+                    customConfigFound = findCustomConfigInPath(project.basePath).isNotEmpty()
+                    customConfigLastCheckTime = it
+                }
 
-            customConfigFound
-        }
+                customConfigFound
+            }
 
     override fun checkFile(file: PsiFile, manager: InspectionManager, isOnTheFly: Boolean): Array<ProblemDescriptor>? {
         fun matchAndShow(issues: List<LintIssue>, matchName: String): Array<ProblemDescriptor>? {
-            val rst = mutableListOf<ProblemDescriptor>()
-
-            val document = PsiDocumentManager.getInstance(manager.project).getDocument(file)!!
+            val document = PsiDocumentManager.getInstance(manager.project).getDocument(file) ?: return null
+            var lineShift = 0
+            var shiftCount = 0
+            val beforeDirtyZone = mutableListOf<ProblemDescriptor>()
+            val afterDirtyZone = mutableListOf<ProblemDescriptor>()
+            // issues is already sorted by #line
             for (issue in issues.filter { it.Pos.Filename == matchName }) {
-                if (issue.Pos.Line > document.lineCount) continue
-                val lineNumber = issue.Pos.Line - 1
-                var lineStart = document.getLineStartOffset(lineNumber)
-                val lineEnd = document.getLineEndOffset(lineNumber)
-                if (issue.SourceLines != null       // workaround: `unused` linter doesn't report SourceLines
-                        && issue.SourceLines.firstOrNull() != document.getText(TextRange.create(lineStart, lineEnd)))
-                    // Text not match, file is modified
-                    break
+                // line that linter reported is 1-based
+                var lineNumber = issue.Pos.Line - 1 + lineShift
+                if (issue.SourceLines != null       // for 'unused', SourceLines is null, unable to determine line shift, just skip them
+                        && issue.SourceLines.first() !=
+                        document.getText(TextRange.create(document.getLineStartOffset(lineNumber), document.getLineEndOffset(lineNumber)))) {
+                    /** for a modification, line is added / changed / deleted
+                     * which means, zone before / after dirty zone is not changed
+                     * issues in clean zone may still useful
+                     */
+                    logger.info("entering dirty zone")
+                    // entering dirty zone
+                    afterDirtyZone.clear()             // previous match may be mistake in dirty zone
+                    if (shiftCount > 4) break          // avoid endless shifting
+                    var relocated = false
+                    // search for equal line before / after
+                    for (line in maxOf(0, lineNumber - 5 - shiftCount)..minOf(document.lineCount - 1, lineNumber + 5 + shiftCount)) {
+                        if (line != lineNumber
+                                && issue.SourceLines.first() ==
+                                document.getText(TextRange.create(document.getLineStartOffset(line), document.getLineEndOffset(line)))) {
+                            lineShift = line - issue.Pos.Line + 1
+                            relocated = true
+                            break
+                        }
+                    }
 
-                lineStart += issue.Pos.Column
-                if (issue.Pos.Column > 0) lineStart--       // hack
-                if (lineStart > lineEnd) break
+                    shiftCount++
+                    // unable to locate the shift, text is not matched, so skip current issue
+                    if (!relocated) continue
+                    // because line shifted, re-calc pos
+                    lineNumber = issue.Pos.Line - 1 + lineShift
+                }
 
-                val handler = quickFixHandler[issue.FromLinter] ?: defaultHandler
-                val (quickFix, range) = handler.suggestFix(file, issue)
-                rst.add(
-                    manager.createProblemDescriptor(
-                        file,
-                        range ?: TextRange.create(lineStart, lineEnd),
-                        handler.description(issue),
-                        ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
-                        isOnTheFly,
-                        // experimental: try to auto-fix the problem
-                        *quickFix
-                ))
+                val handler = quickFixHandler.getOrDefault(issue.FromLinter, defaultHandler)
+                val (quickFix, range) = handler.suggestFix(file, document, issue, lineNumber)
+
+                val zone = if (shiftCount == 0) beforeDirtyZone else afterDirtyZone
+                zone.add(
+                        manager.createProblemDescriptor(
+                                file,
+                                range,
+                                handler.description(issue),
+                                ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
+                                isOnTheFly,
+                                *quickFix
+                        ))
             }
 
-            return rst.toTypedArray()
+            beforeDirtyZone.addAll(afterDirtyZone)
+            return beforeDirtyZone.toTypedArray()
         }
 
         if (!File(GoLinterConfig.goLinterExe).canExecute()/* no linter executable */ || file !is GoFile) return null
@@ -289,7 +313,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         mutex.lock()
         // if there's already same task in backlog, we could use it's result directly
         // if there's not, add a new one
-        val workLoad = workLoads.getOrPut(module){ GoLinterWorkLoad(module, parameters, mapOf("PATH" to envPath, "GOPATH" to goPaths)) }
+        val workLoad = workLoads.getOrPut(module) { GoLinterWorkLoad(module, parameters, mapOf("PATH" to envPath, "GOPATH" to goPaths)) }
         workLoad.mutex.lock()
 
         // tell the worker to do the job
@@ -309,7 +333,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                     val parsed = Gson().fromJson(
                             // because first line will be the "--maligned.suggest-new" flag deprecation warning
                             processResult.stdout.substring(processResult.stdout.indexOf('\n') + 1),
-                            LintReport::class.java).Issues
+                            LintReport::class.java).Issues?.let { it.sortedWith(compareBy({ issue -> issue.Pos.Filename }, { issue -> issue.Pos.Line })) }
 
                     synchronized(cache) {
                         cache[module] = processingTime to parsed
