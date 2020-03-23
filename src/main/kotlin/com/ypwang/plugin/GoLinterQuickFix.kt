@@ -39,15 +39,16 @@ private inline fun <reified T : PsiElement> chainFindAndHandle(
 
 abstract class ProblemHandler {
     fun suggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange> {
-        try {
-            val (fix, range) = doSuggestFix(file, document, issue, overrideLine)
+        val fix = try {
+            val (_fix, range) = doSuggestFix(file, document, issue, overrideLine)
             if (range != null)
-                return fix to range
-            return fix to TextRange.create(calcPos(document, issue, overrideLine), document.getLineEndOffset(overrideLine))
+                return _fix to range
+            _fix
         } catch (e: Exception) {
             // ignore
-            return emptyLocalQuickFix to TextRange.create(calcPos(document, issue, overrideLine), document.getLineEndOffset(overrideLine))
+            emptyLocalQuickFix
         }
+        return fix to TextRange.create(calcPos(document, issue, overrideLine), document.getLineEndOffset(overrideLine))
     }
 
     open fun description(issue: LintIssue): String = "${issue.Text} (${issue.FromLinter})"
@@ -262,14 +263,13 @@ private val unparamHandler = object : ProblemHandler() {
 private val duplHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> {
         assert(issue.LineRange != null)
-        // to avoid annoying, just show 1 line
+        // to avoid annoying, just show the first line
         val start = document.getLineStartOffset(overrideLine)
         val end = document.getLineEndOffset(overrideLine)
         return emptyLocalQuickFix to TextRange(start, end)
     }
 }
 
-// experimental
 private val goconstHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             chainFindAndHandle(file, document, issue, overrideLine) { element: GoStringLiteral ->
@@ -304,7 +304,7 @@ private val malignedHandler = object : ProblemHandler() {
     }
 }
 
-// attempt to suggest auto-fix, if possible, clarify affected PsiElement for better inspection`
+// attempt to suggest auto-fix, if possible, clarify affected PsiElement for better inspection
 val quickFixHandler = mapOf(
         "structcheck" to namedElementHandler,
         "varcheck" to namedElementHandler,

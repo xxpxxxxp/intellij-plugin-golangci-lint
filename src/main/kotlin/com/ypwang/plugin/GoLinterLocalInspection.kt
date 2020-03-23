@@ -163,14 +163,13 @@ class GoLinterLocalInspection : LocalInspectionTool() {
     override fun checkFile(file: PsiFile, manager: InspectionManager, isOnTheFly: Boolean): Array<ProblemDescriptor>? {
         fun matchAndShow(issues: List<LintIssue>, matchName: String): Array<ProblemDescriptor>? {
             val document = PsiDocumentManager.getInstance(manager.project).getDocument(file) ?: return null
-            var lineShift = 0
+            var lineShift = -1      // line that linter reported is 1-based
             var shiftCount = 0
             val beforeDirtyZone = mutableListOf<ProblemDescriptor>()
             val afterDirtyZone = mutableListOf<ProblemDescriptor>()
             // issues is already sorted by #line
             for (issue in issues.filter { it.Pos.Filename == matchName }) {
-                // line that linter reported is 1-based
-                var lineNumber = issue.Pos.Line - 1 + lineShift
+                var lineNumber = issue.Pos.Line + lineShift
                 if (issue.SourceLines != null       // for 'unused', SourceLines is null, unable to determine line shift, just skip them
                         && issue.SourceLines.first() !=
                         document.getText(TextRange.create(document.getLineStartOffset(lineNumber), document.getLineEndOffset(lineNumber)))) {
@@ -178,7 +177,6 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                      * which means, zone before / after dirty zone is not changed
                      * issues in clean zone may still useful
                      */
-                    logger.info("entering dirty zone")
                     // entering dirty zone
                     afterDirtyZone.clear()             // previous match may be mistake in dirty zone
                     if (shiftCount > 4) break          // avoid endless shifting
@@ -188,7 +186,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                         if (line != lineNumber
                                 && issue.SourceLines.first() ==
                                 document.getText(TextRange.create(document.getLineStartOffset(line), document.getLineEndOffset(line)))) {
-                            lineShift = line - issue.Pos.Line + 1
+                            lineShift = line - issue.Pos.Line
                             relocated = true
                             break
                         }
@@ -198,7 +196,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                     // unable to locate the shift, text is not matched, so skip current issue
                     if (!relocated) continue
                     // because line shifted, re-calc pos
-                    lineNumber = issue.Pos.Line - 1 + lineShift
+                    lineNumber = issue.Pos.Line + lineShift
                 }
 
                 val handler = quickFixHandler.getOrDefault(issue.FromLinter, defaultHandler)
@@ -302,7 +300,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             parameters.add("--maligned.suggest-new")
 
         // didn't find config in project root, nor the user selected use config file
-        if ((!customConfigDetected(manager.project) || !GoLinterConfig.useConfigFile) && GoLinterConfig.enabledLinters != null) {
+        if (!GoLinterConfig.useConfigFile && !customConfigDetected(manager.project) && GoLinterConfig.enabledLinters != null) {
             parameters.add("--disable-all")
             parameters.add("-E")
             parameters.add(GoLinterConfig.enabledLinters!!.joinToString(",") { it.split(' ').first() })
@@ -392,9 +390,9 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                             processResult.stderr.contains("error computing diff") ->
                                 notificationGroup.createNotification(
                                         ErrorTitle,
-                                        "diff is needed for running gofmt/goimports. Either put GNU diff & GNU LibIconv binary in PATH, or disable gofmt/goimports.",
+                                        "diff is needed for running gofmt/goimports. Either put <a href=\"http://ftp.gnu.org/gnu/diffutils/\">GNU diff</a> & <a href=\"https://ftp.gnu.org/pub/gnu/libiconv/\">GNU LibIconv</a> binary in PATH, or disable gofmt/goimports.",
                                         NotificationType.ERROR,
-                                        null as NotificationListener?).apply {
+                                        NotificationListener.URL_OPENING_LISTENER).apply {
                                     this.addAction(NotificationAction.createSimple("Configure") {
                                         ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
                                         this.expire()
