@@ -1,8 +1,6 @@
 package com.ypwang.plugin
 
 import org.junit.Test
-
-import com.ypwang.plugin.util.fetchProcessOutput
 import org.junit.Assert
 
 class ProcessWrapperTest {

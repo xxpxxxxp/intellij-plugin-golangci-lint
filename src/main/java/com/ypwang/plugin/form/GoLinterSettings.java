@@ -28,7 +28,7 @@ import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import com.ypwang.plugin.GoLinterConfig;
 import com.ypwang.plugin.GoLinterLocalInspection;
-import com.ypwang.plugin.GoSupportedLinters;
+import com.ypwang.plugin.GolangCiOutputParser;
 import com.ypwang.plugin.UtilitiesKt;
 import com.ypwang.plugin.model.GoLinter;
 import kotlin.Unit;
@@ -71,6 +71,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private HashSet<String> lintersInPath;
     private Project curProject;
     private String linterPathSelected;
+    private String configFile = "";     // not suppose to change in current dialog
 
     public GoLinterSettings(@NotNull Project project) {
         curProject = project;
@@ -149,7 +150,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
         lintersInPath = getLinterFromPath();
 
-        String configFile = GoLinterLocalInspection.Companion.findCustomConfigInPath(curProject.getBasePath());
+        configFile = GoLinterLocalInspection.Companion.findCustomConfigInPath(curProject.getBasePath());
         if (!configFile.isEmpty()) {
             // found an valid config file
             configFileHintLabel = new LinkLabel<String>(
@@ -197,11 +198,13 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
                 String selected = (String) linterComboBox.getSelectedItem();
                 if (new File(selected).canExecute()) {
-                    List<GoLinter> allLinters = GoSupportedLinters.Companion.getInstance(selected).getLinters();
+                    List<GoLinter> allLinters = GolangCiOutputParser.INSTANCE.parseLinters(
+                            GolangCiOutputParser.INSTANCE.runProcess(Objects.requireNonNull(curProject.getBasePath()), Arrays.asList(selected, "linters"), new HashMap<>())
+                    );
 
                     Set<String> enabledLinters;
                     String[] enabledLintersInConfig = GoLinterConfig.INSTANCE.getEnabledLinters();
-                    if (enabledLintersInConfig != null)
+                    if (enabledLintersInConfig != null && configFile.isEmpty())
                         // previously selected linters
                         enabledLinters = Arrays.stream(enabledLintersInConfig).collect(Collectors.toSet());
                     else

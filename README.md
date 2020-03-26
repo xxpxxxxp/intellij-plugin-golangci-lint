@@ -1,4 +1,7 @@
 [![Publish](https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/workflows/Publish/badge.svg)](https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/actions)
+[![Issues](https://img.shields.io/github/issues/xxpxxxxp/intellij-plugin-golangci-lint)](https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/issues)
+[![License](https://img.shields.io/github/license/xxpxxxxp/intellij-plugin-golangci-lint)](https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/LICENSE)
+[![Version](https://img.shields.io/jetbrains/plugin/v/12496-go-linter)](https://plugins.jetbrains.com/plugin/12496-go-linter)
 [![#Download](https://img.shields.io/jetbrains/plugin/d/12496-go-linter.svg)](https://plugins.jetbrains.com/plugin/12496-go-linter)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/50dd3264c0f74e85929d53bd780fcdfd)](https://app.codacy.com/manual/xxpxxxxp/intellij-plugin-golangci-lint?utm_source=github.com&utm_medium=referral&utm_content=xxpxxxxp/intellij-plugin-golangci-lint&utm_campaign=Badge_Grade_Dashboard)
 
@@ -15,7 +18,9 @@ A lot of code pieces copied from [clion-clangtidy](https://bitbucket.org/baldur/
 * If the plugin reports an error, please copy-paste the error content
 
 ## What's next
-* Working on auto-fix
+* Refactor process scheduling, remove extra thread
+* Bug fix
+* Code quality improvement
 
 ####
 ![code for food](https://i.imgur.com/ZY9Jwp3.jpg) @Seattle

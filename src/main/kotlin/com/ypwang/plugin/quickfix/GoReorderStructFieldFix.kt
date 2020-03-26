@@ -14,7 +14,7 @@ class GoReorderStructFieldFix(
         private val replacement: String,
         private val element: GoTypeDeclaration
 ) : LocalQuickFix {
-    override fun getFamilyName(): String = "Reorder struct '$structName' (caution: comments will be left out / double check result!)"
+    override fun getFamilyName(): String = "Reorder struct '$structName' (caution: comments will be left out & double check result!)"
 
     // reorder field is tricky, because we got limited info from maligned linter
     // and struct might have comment/tag/multi field on same line

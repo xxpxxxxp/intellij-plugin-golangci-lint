@@ -4,7 +4,6 @@ import com.goide.configuration.GoSdkConfigurable
 import com.goide.project.GoProjectLibrariesService
 import com.goide.psi.GoFile
 import com.goide.sdk.GoSdkService
-import com.google.gson.Gson
 import com.intellij.codeInspection.InspectionManager
 import com.intellij.codeInspection.LocalInspectionTool
 import com.intellij.codeInspection.ProblemDescriptor
@@ -25,7 +24,6 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 import com.ypwang.plugin.form.GoLinterSettings
 import com.ypwang.plugin.model.LintIssue
-import com.ypwang.plugin.model.LintReport
 import com.ypwang.plugin.model.RunProcessResult
 import java.io.File
 import java.nio.file.Path
@@ -134,11 +132,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 mutex.unlock()
 
                 // executing
-                head.result = fetchProcessOutput(ProcessBuilder(head.processParameters).apply {
-                    val curEnv = this.environment()
-                    head.env.forEach { kv -> curEnv[kv.key] = kv.value }
-                    this.directory(File(head.runningPath))
-                }.start())
+                head.result = GolangCiOutputParser.runProcess(head.runningPath, head.processParameters, head.env)
                 head.mutex.lock()
                 head.condition.signalAll()
                 head.mutex.unlock()
@@ -328,10 +322,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             when (processResult.returnCode) {
                 // 0: no hint found; 1: hint found
                 0, 1 -> {
-                    val parsed = Gson().fromJson(
-                            // because first line will be the "--maligned.suggest-new" flag deprecation warning
-                            processResult.stdout.substring(processResult.stdout.indexOf('\n') + 1),
-                            LintReport::class.java).Issues?.let { it.sortedWith(compareBy({ issue -> issue.Pos.Filename }, { issue -> issue.Pos.Line })) }
+                    val parsed = GolangCiOutputParser.parseIssues(processResult)
 
                     synchronized(cache) {
                         cache[module] = processingTime to parsed
