@@ -199,7 +199,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                 String selected = (String) linterComboBox.getSelectedItem();
                 if (new File(selected).canExecute()) {
                     List<GoLinter> allLinters = GolangCiOutputParser.INSTANCE.parseLinters(
-                            GolangCiOutputParser.INSTANCE.runProcess(Objects.requireNonNull(curProject.getBasePath()), Arrays.asList(selected, "linters"), new HashMap<>())
+                            GolangCiOutputParser.INSTANCE.runProcess(Arrays.asList(selected, "linters"), curProject.getBasePath(), new HashMap<>())
                     );
 
                     Set<String> enabledLinters;

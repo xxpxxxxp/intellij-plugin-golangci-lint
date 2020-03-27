@@ -8,11 +8,12 @@ import com.ypwang.plugin.model.RunProcessResult
 import java.io.File
 
 object GolangCiOutputParser {
-    fun runProcess(runningDir: String, params: List<String>, env: Map<String, String>): RunProcessResult =
+    fun runProcess(params: List<String>, runningDir: String?, env: Map<String, String>): RunProcessResult =
         fetchProcessOutput(ProcessBuilder(params).apply {
             val curEnv = this.environment()
             env.forEach { kv -> curEnv[kv.key] = kv.value }
-            this.directory(File(runningDir))
+            if (runningDir != null)
+                this.directory(File(runningDir))
         }.start())
 
     fun parseIssues(result: RunProcessResult): List<LintIssue>? {

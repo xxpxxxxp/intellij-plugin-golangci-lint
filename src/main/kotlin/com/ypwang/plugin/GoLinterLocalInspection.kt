@@ -132,7 +132,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 mutex.unlock()
 
                 // executing
-                head.result = GolangCiOutputParser.runProcess(head.runningPath, head.processParameters, head.env)
+                head.result = GolangCiOutputParser.runProcess(head.processParameters, head.runningPath, head.env)
                 head.mutex.lock()
                 head.condition.signalAll()
                 head.mutex.unlock()
