@@ -12,7 +12,6 @@ import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationListener
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.options.ShowSettingsUtil
@@ -22,21 +21,26 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
+import com.jetbrains.rd.util.first
 import com.ypwang.plugin.form.GoLinterSettings
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.model.RunProcessResult
 import java.io.File
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 class GoLinterLocalInspection : LocalInspectionTool() {
     companion object {
         private const val ErrorTitle = "Go linter running error"
         private const val notificationFrequencyCap = 60 * 1000L
+
+        private val systemPath = System.getenv("PATH")
+        private val systemGoPath = System.getenv("GOPATH")      // immutable in current idea process
 
         fun findCustomConfigInPath(path: String?): String {
             val varPath: String? = path
@@ -58,87 +62,56 @@ class GoLinterLocalInspection : LocalInspectionTool() {
 
         private fun isSaved(file: PsiFile): Boolean {
             val virtualFile = file.virtualFile
-            val document = FileDocumentManager.getInstance().getCachedDocument(virtualFile)
+            val fileEditorManager = FileEditorManager.getInstance(file.project)
+            if (!fileEditorManager.isFileOpen(virtualFile)) return true     // no editor opened, so data should be saved
 
-            if (document != null) {
-                val fileEditorManager = FileEditorManager.getInstance(file.project)
-                if (fileEditorManager.isFileOpen(virtualFile)) {
-                    var saved = true
-                    val application = ApplicationManager.getApplication()
-                    val done = AtomicReference(false)       // here we use atomic variable as a spinlock
+            var saved = true
+            val application = ApplicationManager.getApplication()
+            val done = AtomicBoolean(false)       // here we use atomic variable as a spinlock
 
-                    application.invokeLater {
-                        // ideally there should be 1 editor, unless in split view
-                        for (editor in fileEditorManager.getEditors(virtualFile)) {
-                            if (editor.isModified) {
-                                saved = false
-                                break
-                            }
-                        }
-                        done.set(true)
+            application.invokeLater {
+                // ideally there should be 1 editor, unless in split view
+                for (editor in fileEditorManager.getEditors(virtualFile)) {
+                    if (editor.isModified) {
+                        saved = false
+                        break
                     }
-
-                    val now = System.currentTimeMillis()
-                    while (!done.compareAndSet(true, false)) {
-                        // as a last resort, break the loop on timeout
-                        if (System.currentTimeMillis() - now > 1000) {
-                            // may hang for 1s, hope that never happen
-                            logger.info("Cannot get confirmation from dispatch thread, break the loop")
-                            return false
-                        }
-                    }
-
-                    return saved
                 }
-                // no editor opened, so data should be saved
-                return true
+                done.set(true)
             }
 
-            return false
+            val now = System.currentTimeMillis()
+            while (!done.compareAndSet(true, false)) {
+                // as a last resort, break the loop on timeout
+                if (System.currentTimeMillis() - now > 1000) {
+                    // may hang for 1s, hope that never happen
+                    logger.info("Cannot get confirmation from dispatch thread, break the loop")
+                    return false
+                }
+            }
+
+            return saved
         }
     }
 
-    private class GoLinterWorkLoad(val runningPath: String, val processParameters: List<String>, val env: Map<String, String>) {
-        val mutex = ReentrantLock()
-        val condition: Condition = mutex.newCondition()
+    private class GoLinterWorkLoad {
+        val executionMutex = ReentrantLock()
+        val executionCondition: Condition = executionMutex.newCondition()
+        val broadcastMutex = ReentrantLock()
+        val broadcastCondition: Condition = broadcastMutex.newCondition()
         var result: RunProcessResult? = null
     }
 
-    private val systemPath = System.getenv("PATH")
-    private val systemGoPath = System.getenv("GOPATH")      // immutable in current idea process
     private var showError = true
     private val notificationLastTime = AtomicLong(-1L)
 
     // consumer queue
-    private val mutex = ReentrantLock()
-    private val condition: Condition = mutex.newCondition()
-    private val workLoads = sortedMapOf<String, GoLinterWorkLoad>()
+    private val executionLock = AtomicBoolean(false)
+    private val workloadsLock = ReentrantLock()
+    private val workLoads = LinkedHashMap<String, GoLinterWorkLoad>()
 
     // cache module <> (timestamp, issues)
     private val cache = mutableMapOf<String, Pair<Long, List<LintIssue>?>>()
-
-    init {
-        // a singleton thread to execute go-linter, to avoid multiple instances drain out CPU
-        Thread {
-            while (true) {
-                mutex.lock()
-                if (workLoads.isEmpty())
-                    condition.await()
-
-                // pop LIFO
-                val key = workLoads.lastKey()
-                val head = workLoads[key]!!
-                workLoads.remove(key)
-                mutex.unlock()
-
-                // executing
-                head.result = GolangCiOutputParser.runProcess(head.processParameters, head.runningPath, head.env)
-                head.mutex.lock()
-                head.condition.signalAll()
-                head.mutex.unlock()
-            }
-        }.start()
-    }
 
     private var customConfigFound: Boolean = false
     private var customConfigLastCheckTime = Long.MIN_VALUE
@@ -155,63 +128,6 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             }
 
     override fun checkFile(file: PsiFile, manager: InspectionManager, isOnTheFly: Boolean): Array<ProblemDescriptor>? {
-        fun matchAndShow(issues: List<LintIssue>, matchName: String): Array<ProblemDescriptor>? {
-            val document = PsiDocumentManager.getInstance(manager.project).getDocument(file) ?: return null
-            var lineShift = -1      // line that linter reported is 1-based
-            var shiftCount = 0
-            val beforeDirtyZone = mutableListOf<ProblemDescriptor>()
-            val afterDirtyZone = mutableListOf<ProblemDescriptor>()
-            // issues is already sorted by #line
-            for (issue in issues.filter { it.Pos.Filename == matchName }) {
-                var lineNumber = issue.Pos.Line + lineShift
-                if (issue.SourceLines != null       // for 'unused', SourceLines is null, unable to determine line shift, just skip them
-                        && issue.SourceLines.first() !=
-                        document.getText(TextRange.create(document.getLineStartOffset(lineNumber), document.getLineEndOffset(lineNumber)))) {
-                    /** for a modification, line is added / changed / deleted
-                     * which means, zone before / after dirty zone is not changed
-                     * issues in clean zone may still useful
-                     */
-                    // entering dirty zone
-                    afterDirtyZone.clear()             // previous match may be mistake in dirty zone
-                    if (shiftCount > 4) break          // avoid endless shifting
-                    var relocated = false
-                    // search for equal line before / after
-                    for (line in maxOf(0, lineNumber - 5 - shiftCount)..minOf(document.lineCount - 1, lineNumber + 5 + shiftCount)) {
-                        if (line != lineNumber
-                                && issue.SourceLines.first() ==
-                                document.getText(TextRange.create(document.getLineStartOffset(line), document.getLineEndOffset(line)))) {
-                            lineShift = line - issue.Pos.Line
-                            relocated = true
-                            break
-                        }
-                    }
-
-                    shiftCount++
-                    // unable to locate the shift, text is not matched, so skip current issue
-                    if (!relocated) continue
-                    // because line shifted, re-calc pos
-                    lineNumber = issue.Pos.Line + lineShift
-                }
-
-                val handler = quickFixHandler.getOrDefault(issue.FromLinter, defaultHandler)
-                val (quickFix, range) = handler.suggestFix(file, document, issue, lineNumber)
-
-                val zone = if (shiftCount == 0) beforeDirtyZone else afterDirtyZone
-                zone.add(
-                        manager.createProblemDescriptor(
-                                file,
-                                range,
-                                handler.description(issue),
-                                ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
-                                isOnTheFly,
-                                *quickFix
-                        ))
-            }
-
-            beforeDirtyZone.addAll(afterDirtyZone)
-            return beforeDirtyZone.toTypedArray()
-        }
-
         if (!File(GoLinterConfig.goLinterExe).canExecute()/* no linter executable */ || file !is GoFile) return null
 
         val absolutePath = Paths.get(file.virtualFile.path)     // file's absolute path
@@ -224,21 +140,14 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 cache[module]
             }
 
-            if (!isSaved(file)) {
-                // don't run linter when hot editing, as that will cause typing lagged
-                // while if we have previous result, it's better than nothing to return those results
-                // issues before the editing area could still be useful
-                logger.info("Run skipped because of editing")
-                return issueWithTTL?.second?.let { matchAndShow(it, matchName) }
-            }
-
-            // cached result is newer than both last config saved time and this file's last modified time
-            if (issueWithTTL != null
-                    && file.virtualFile.timeStamp < issueWithTTL.first
-                    && GoLinterSettings.getLastSavedTime() < issueWithTTL.first
-                    && issueWithTTL.second != null) {
-                return matchAndShow(issueWithTTL.second!!, matchName)
-            }
+            if (
+            // don't run linter when hot editing, as that will cause typing lagged
+            // while if we have previous result, it's better than nothing to return those results
+            // issues not in dirty zone could still be useful
+                    !isSaved(file) ||
+                    // cached result is newer than both last config saved time and this file's last modified time
+                    (issueWithTTL != null && file.virtualFile.timeStamp < issueWithTTL.first && GoLinterSettings.getLastSavedTime() < issueWithTTL.first))
+                return issueWithTTL?.second?.let { matchAndShow(file, manager, isOnTheFly, it, matchName) }
         }
 
         // cache not found or outdated
@@ -263,6 +172,25 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 envPath = "$goBin${File.pathSeparator}$envPath"
         }
 
+        val (issues, success) =
+                processResult(
+                        execute(
+                                module,
+                                buildParameters(manager.project),
+                                mapOf("PATH" to envPath, "GOPATH" to goPaths)
+                        ),
+                        manager.project,
+                        module
+                )
+        if (success) {
+            synchronized(cache) {
+                cache[module] = System.currentTimeMillis() to issues
+            }
+        }
+        return issues?.let { matchAndShow(file, manager, isOnTheFly, it, matchName) }
+    }
+
+    private fun buildParameters(project: Project): List<String> {
         // build parameters
         val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
         val provides = mutableSetOf<String>()
@@ -294,127 +222,232 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             parameters.add("--maligned.suggest-new")
 
         // didn't find config in project root, nor the user selected use config file
-        if (!GoLinterConfig.useConfigFile && !customConfigDetected(manager.project) && GoLinterConfig.enabledLinters != null) {
+        if (!GoLinterConfig.useConfigFile && !customConfigDetected(project) && GoLinterConfig.enabledLinters != null) {
             parameters.add("--disable-all")
             parameters.add("-E")
             parameters.add(GoLinterConfig.enabledLinters!!.joinToString(",") { it.split(' ').first() })
         }
         parameters.add(".")
 
-        val processingTime = System.currentTimeMillis()
-        mutex.lock()
-        // if there's already same task in backlog, we could use it's result directly
-        // if there's not, add a new one
-        val workLoad = workLoads.getOrPut(module) { GoLinterWorkLoad(module, parameters, mapOf("PATH" to envPath, "GOPATH" to goPaths)) }
-        workLoad.mutex.lock()
+        return parameters
+    }
 
-        // tell the worker to do the job
-        condition.signal()
-        mutex.unlock()
+    // executionLock must be hold during the whole time of execution
+    // wake up backlog thread if there's any, or release executionLock
+    private fun executeAndWakeBacklogThread(runningPath: String, parameters: List<String>, env: Map<String, String>): RunProcessResult {
+        val result = GolangCiOutputParser.runProcess(parameters, runningPath, env)
 
-        // wait for worker done the job
-        workLoad.condition.await()
-        workLoad.mutex.unlock()
+        val workload = workloadsLock.withLock {
+            if (workLoads.isNotEmpty()) {
+                val kv = workLoads.first()
+                workLoads.remove(kv.key)
+                kv.value
+            } else {
+                // nobody waiting in backlog, release executionLock
+                executionLock.set(false)
+                return result
+            }
+        }
 
-        val now = System.currentTimeMillis()
-        if (workLoad.result != null) {
-            val processResult = workLoad.result!!
-            when (processResult.returnCode) {
-                // 0: no hint found; 1: hint found
-                0, 1 -> {
-                    val parsed = GolangCiOutputParser.parseIssues(processResult)
+        // then 'executionLock' must be holding, turn over executionLock
+        workload.executionMutex.withLock {
+            workload.executionCondition.signal()
+        }
 
-                    synchronized(cache) {
-                        cache[module] = processingTime to parsed
+        return result
+    }
+
+    private fun execute(runningPath: String, parameters: List<String>, env: Map<String, String>): RunProcessResult {
+        // main execution logic: 1. FIFO; 2. De-dup in backlog
+        if (executionLock.compareAndSet(false, true))
+            // own the execution lock, run immediately
+            return executeAndWakeBacklogThread(runningPath, parameters, env)
+
+        // had to wait, add to backlog
+        val (foundInBacklog, workload) = workloadsLock.withLock {
+            // double check
+            if (executionLock.compareAndSet(false, true))
+                // working thread released executionLock, so there's no backlog now, run immediately
+                return executeAndWakeBacklogThread(runningPath, parameters, env)
+
+            var found = true
+            var wl = workLoads[runningPath]
+            if (wl == null) {
+                found = false
+                wl = GoLinterWorkLoad()
+                workLoads[runningPath] = wl
+            }
+
+            if (found) wl.broadcastMutex.lock()     // wait on others notify me
+            else wl.executionMutex.lock()           // wait on others release execution lock
+
+            found to wl
+        }
+
+        if (foundInBacklog) {
+            // waiting for others finish the job
+            workload.broadcastCondition.await()
+            workload.broadcastMutex.unlock()
+        } else {
+            workload.executionCondition.await()
+            workload.executionMutex.unlock()
+            // executionLock guaranteed
+            workload.result = executeAndWakeBacklogThread(runningPath, parameters, env)
+            // wake up backlog threads listen on me
+            workload.broadcastMutex.lock()
+            workload.broadcastCondition.signalAll()
+            workload.broadcastMutex.unlock()
+        }
+
+        return workload.result!!
+    }
+
+    private fun processResult(processResult: RunProcessResult, project: Project, module: String): Pair<List<LintIssue>?, Boolean> {
+        when (processResult.returnCode) {
+            // 0: no hint found; 1: hint found
+            0, 1 -> return GolangCiOutputParser.parseIssues(processResult) to true
+            // run error
+            else -> {
+                logger.warn("Run error: ${processResult.stderr}. Usually it's caused by wrongly configured parameters or corrupted with config file.")
+
+                val now = System.currentTimeMillis()
+                // freq cap 1min
+                if (showError && (notificationLastTime.get() + notificationFrequencyCap) < now) {
+                    val notification = when {
+                        processResult.stderr.contains("buildssa: analysis skipped") || processResult.stderr.contains("typechecking error") ->
+                            // syntax error or package not found, programmer should fix that first
+                            return null to false
+                        processResult.stderr.contains("Can't read config") ->
+                            notificationGroup.createNotification(
+                                    ErrorTitle,
+                                    "invalid format of config file",
+                                    NotificationType.ERROR,
+                                    null as NotificationListener?).apply {
+                                // find the config file
+                                val configFilePath = findCustomConfigInPath(module)
+                                val configFile = File(configFilePath)
+                                if (configFile.exists()) {
+                                    this.addAction(NotificationAction.createSimple("Open ${configFile.name}") {
+                                        OpenFileDescriptor(project, LocalFileSystem.getInstance().findFileByIoFile(configFile)!!).navigate(true)
+                                        this.expire()
+                                    })
+                                }
+                            }
+                        processResult.stderr.contains("all linters were disabled, but no one linter was enabled") ->
+                            notificationGroup.createNotification(
+                                    ErrorTitle,
+                                    "must enable at least one linter",
+                                    NotificationType.ERROR,
+                                    null as NotificationListener?).apply {
+                                this.addAction(NotificationAction.createSimple("Configure") {
+                                    ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
+                                    this.expire()
+                                })
+                            }
+                        processResult.stderr.contains("\\\"go\\\": executable file not found in \$PATH") ->
+                            notificationGroup.createNotification(
+                                    ErrorTitle,
+                                    "'GOROOT' must be set",
+                                    NotificationType.ERROR,
+                                    null as NotificationListener?).apply {
+                                this.addAction(NotificationAction.createSimple("Setup GOROOT") {
+                                    ShowSettingsUtil.getInstance().editConfigurable(project, GoSdkConfigurable(project, true))
+                                    this.expire()
+                                })
+                            }
+                        processResult.stderr.contains("error computing diff") ->
+                            notificationGroup.createNotification(
+                                    ErrorTitle,
+                                    "diff is needed for running gofmt/goimports. Either put <a href=\"http://ftp.gnu.org/gnu/diffutils/\">GNU diff</a> & <a href=\"https://ftp.gnu.org/pub/gnu/libiconv/\">GNU LibIconv</a> binary in PATH, or disable gofmt/goimports.",
+                                    NotificationType.ERROR,
+                                    NotificationListener.URL_OPENING_LISTENER).apply {
+                                this.addAction(NotificationAction.createSimple("Configure") {
+                                    ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
+                                    this.expire()
+                                })
+                            }
+                        else ->
+                            notificationGroup.createNotification(
+                                    ErrorTitle,
+                                    "Possibly invalid config or syntax error",
+                                    NotificationType.ERROR,
+                                    null as NotificationListener?).apply {
+                                this.addAction(NotificationAction.createSimple("Configure") {
+                                    ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
+                                    this.expire()
+                                })
+                            }
                     }
 
-                    return parsed?.let { matchAndShow(it, matchName) }
-                }
-                // run error
-                else -> {
-                    logger.warn("Run error: ${processResult.stderr}. Usually it's caused by wrongly configured parameters or corrupted with config file.")
+                    notification.addAction(NotificationAction.createSimple("Do not show again") {
+                        showError = false
+                        notification.expire()
+                    })
 
-                    // freq cap 1min
-                    if (showError && (notificationLastTime.get() + notificationFrequencyCap) < now) {
-                        val notification = when {
-                            processResult.stderr.contains("buildssa: analysis skipped") || processResult.stderr.contains("typechecking error") ->
-                                // syntax error or package not found, programmer should fix that first
-                                return null
-                            processResult.stderr.contains("Can't read config") ->
-                                notificationGroup.createNotification(
-                                        ErrorTitle,
-                                        "invalid format of config file",
-                                        NotificationType.ERROR,
-                                        null as NotificationListener?).apply {
-                                    // find the config file
-                                    val configFilePath = findCustomConfigInPath(module)
-                                    val configFile = File(configFilePath)
-                                    if (configFile.exists()) {
-                                        this.addAction(NotificationAction.createSimple("Open ${configFile.name}") {
-                                            OpenFileDescriptor(manager.project, LocalFileSystem.getInstance().findFileByIoFile(configFile)!!).navigate(true)
-                                            this.expire()
-                                        })
-                                    }
-                                }
-                            processResult.stderr.contains("all linters were disabled, but no one linter was enabled") ->
-                                notificationGroup.createNotification(
-                                        ErrorTitle,
-                                        "must enable at least one linter",
-                                        NotificationType.ERROR,
-                                        null as NotificationListener?).apply {
-                                    this.addAction(NotificationAction.createSimple("Configure") {
-                                        ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
-                                        this.expire()
-                                    })
-                                }
-                            processResult.stderr.contains("\\\"go\\\": executable file not found in \$PATH") ->
-                                notificationGroup.createNotification(
-                                        ErrorTitle,
-                                        "'GOROOT' must be set",
-                                        NotificationType.ERROR,
-                                        null as NotificationListener?).apply {
-                                    this.addAction(NotificationAction.createSimple("Setup GOROOT") {
-                                        ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoSdkConfigurable(manager.project, true))
-                                        this.expire()
-                                    })
-                                }
-                            processResult.stderr.contains("error computing diff") ->
-                                notificationGroup.createNotification(
-                                        ErrorTitle,
-                                        "diff is needed for running gofmt/goimports. Either put <a href=\"http://ftp.gnu.org/gnu/diffutils/\">GNU diff</a> & <a href=\"https://ftp.gnu.org/pub/gnu/libiconv/\">GNU LibIconv</a> binary in PATH, or disable gofmt/goimports.",
-                                        NotificationType.ERROR,
-                                        NotificationListener.URL_OPENING_LISTENER).apply {
-                                    this.addAction(NotificationAction.createSimple("Configure") {
-                                        ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
-                                        this.expire()
-                                    })
-                                }
-                            else ->
-                                notificationGroup.createNotification(
-                                        ErrorTitle,
-                                        "Possibly invalid config or syntax error",
-                                        NotificationType.ERROR,
-                                        null as NotificationListener?).apply {
-                                    this.addAction(NotificationAction.createSimple("Configure") {
-                                        ShowSettingsUtil.getInstance().editConfigurable(manager.project, GoLinterSettings(manager.project))
-                                        this.expire()
-                                    })
-                                }
-                        }
-
-                        notification.addAction(NotificationAction.createSimple("Do not show again") {
-                            showError = false
-                            notification.expire()
-                        })
-
-                        notification.notify(manager.project)
-                        notificationLastTime.set(now)
-                    }
+                    notification.notify(project)
+                    notificationLastTime.set(now)
                 }
             }
         }
 
         // or skip current run
-        return null
+        return null to false
+    }
+
+    private fun matchAndShow(file: PsiFile, manager: InspectionManager, isOnTheFly: Boolean, issues: List<LintIssue>, matchName: String): Array<ProblemDescriptor>? {
+        val document = PsiDocumentManager.getInstance(manager.project).getDocument(file) ?: return null
+        var lineShift = -1      // line that linter reported is 1-based
+        var shiftCount = 0
+        val beforeDirtyZone = mutableListOf<ProblemDescriptor>()
+        val afterDirtyZone = mutableListOf<ProblemDescriptor>()
+        // issues is already sorted by #line
+        for (issue in issues.filter { it.Pos.Filename == matchName }) {
+            var lineNumber = issue.Pos.Line + lineShift
+            if (issue.SourceLines != null       // for 'unused', SourceLines is null, unable to determine line shift, just skip them
+                    && issue.SourceLines.first() !=
+                    document.getText(TextRange.create(document.getLineStartOffset(lineNumber), document.getLineEndOffset(lineNumber)))) {
+                /** for a modification, line is added / changed / deleted
+                 * which means, zone before / after dirty zone is not changed
+                 * issues in clean zone may still useful
+                 */
+                // entering dirty zone
+                afterDirtyZone.clear()             // previous match may be mistake in dirty zone
+                if (shiftCount > 4) break          // avoid endless shifting
+                var relocated = false
+                // search for equal line before / after
+                for (line in maxOf(0, lineNumber - 5 - shiftCount)..minOf(document.lineCount - 1, lineNumber + 5 + shiftCount)) {
+                    if (line != lineNumber
+                            && issue.SourceLines.first() ==
+                            document.getText(TextRange.create(document.getLineStartOffset(line), document.getLineEndOffset(line)))) {
+                        lineShift = line - issue.Pos.Line
+                        relocated = true
+                        break
+                    }
+                }
+
+                shiftCount++
+                // unable to locate the shift, text is not matched, so skip current issue
+                if (!relocated) continue
+                // because line shifted, re-calc pos
+                lineNumber = issue.Pos.Line + lineShift
+            }
+
+            val handler = quickFixHandler.getOrDefault(issue.FromLinter, defaultHandler)
+            val (quickFix, range) = handler.suggestFix(file, document, issue, lineNumber)
+
+            val zone = if (shiftCount == 0) beforeDirtyZone else afterDirtyZone
+            zone.add(
+                    manager.createProblemDescriptor(
+                            file,
+                            range,
+                            handler.description(issue),
+                            ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
+                            isOnTheFly,
+                            *quickFix
+                    ))
+        }
+
+        beforeDirtyZone.addAll(afterDirtyZone)
+        return beforeDirtyZone.toTypedArray()
     }
 }

@@ -18,7 +18,7 @@ private val nonAvailableFix = emptyLocalQuickFix to null
 private fun calcPos(document: Document, issue: LintIssue, overrideLine: Int): Int =
         // some linter reports whole line
         if (issue.Pos.Column == 0) document.getLineStartOffset(overrideLine)
-        // because Column is 1-based
+        // Column is 1-based
         else document.getLineStartOffset(overrideLine) + issue.Pos.Column - 1
 
 private inline fun <reified T : PsiElement> chainFindAndHandle(
@@ -48,7 +48,8 @@ abstract class ProblemHandler {
             // ignore
             emptyLocalQuickFix
         }
-        return fix to TextRange.create(calcPos(document, issue, overrideLine), document.getLineEndOffset(overrideLine))
+        val pos = calcPos(document, issue, overrideLine)
+        return fix to TextRange.create(pos, maxOf(document.getLineEndOffset(overrideLine), pos))
     }
 
     open fun description(issue: LintIssue): String = "${issue.Text} (${issue.FromLinter})"
