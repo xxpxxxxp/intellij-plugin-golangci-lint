@@ -18,7 +18,6 @@ A lot of code pieces copied from [clion-clangtidy](https://bitbucket.org/baldur/
 * If the plugin reports an error, please copy-paste the error content
 
 ## What's next
-* Refactor process scheduling, remove extra thread
 * Bug fix
 * Code quality improvement
 

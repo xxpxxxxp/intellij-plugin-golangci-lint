@@ -433,7 +433,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             }
 
             val handler = quickFixHandler.getOrDefault(issue.FromLinter, defaultHandler)
-            val (quickFix, range) = handler.suggestFix(file, document, issue, lineNumber)
+            val (quickFix, range) = handler.suggestFix(issue.FromLinter, file, document, issue, lineNumber)
 
             val zone = if (shiftCount == 0) beforeDirtyZone else afterDirtyZone
             zone.add(

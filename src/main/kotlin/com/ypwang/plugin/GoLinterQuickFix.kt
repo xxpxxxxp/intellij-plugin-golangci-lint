@@ -37,9 +37,12 @@ private inline fun <reified T : PsiElement> chainFindAndHandle(
     return nonAvailableFix
 }
 
+// they reports issue of whole function
+private val funcLinters = setOf("funlen", "gocognit", "gochecknoinits", "nakedret")
+
 abstract class ProblemHandler {
-    fun suggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange> {
-        val fix = try {
+    fun suggestFix(linter: String, file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange> {
+        var fix = try {
             val (_fix, range) = doSuggestFix(file, document, issue, overrideLine)
             if (range != null)
                 return _fix to range
@@ -48,6 +51,12 @@ abstract class ProblemHandler {
             // ignore
             emptyLocalQuickFix
         }
+
+        // generally, if there's quick fix available, we won't suggest nolint
+        // and func linters will be take care separately
+        if (fix.isEmpty() && linter !in funcLinters)
+            fix = arrayOf(NoLintSingleLineCommentFix(linter))
+
         val pos = calcPos(document, issue, overrideLine)
         return fix to TextRange.create(pos, maxOf(document.getLineEndOffset(overrideLine), pos))
     }
@@ -80,7 +89,7 @@ private val namedElementHandler = object : ProblemHandler() {
                         } else arrayOf()
                     }
                     is GoFunctionDeclaration ->
-                        arrayOf(GoDeleteQuickFix("Delete function ${element.identifier}", GoFunctionDeclaration::class.java), GoRenameToBlankQuickFix(element))
+                        arrayOf(GoDeleteQuickFix("Delete function ${element.identifier.text}", GoFunctionDeclaration::class.java), GoRenameToBlankQuickFix(element))
                     is GoTypeSpec ->
                         arrayOf<LocalQuickFix>(GoDeleteTypeQuickFix(element.identifier.text))
                     is GoVarDefinition ->
@@ -257,7 +266,12 @@ private val unparamHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             // intellij will report same issue and provides fix, just fit the range
             chainFindAndHandle(file, document, issue, overrideLine) { element: GoParameterDeclaration ->
-                emptyLocalQuickFix to element.textRange
+                var psiElement: PsiElement? = element
+                while (psiElement != null && psiElement !is GoFunctionOrMethodDeclaration)
+                    psiElement = psiElement.parent
+
+                val fix = if (psiElement is GoFunctionOrMethodDeclaration) arrayOf<LocalQuickFix>(NoLintFuncCommentFix("unparam", psiElement)) else emptyLocalQuickFix
+                fix to element.textRange
             }
 }
 
@@ -305,12 +319,16 @@ private val malignedHandler = object : ProblemHandler() {
     }
 }
 
+private fun funcNoLintHandler(linter: String): ProblemHandler =
+        object : ProblemHandler() {
+            override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionOrMethodDeclaration ->
+                        arrayOf<LocalQuickFix>(NoLintFuncCommentFix(linter, element)) to null
+                    }
+        }
+
 // attempt to suggest auto-fix, if possible, clarify affected PsiElement for better inspection
-val quickFixHandler = mapOf(
-        "structcheck" to namedElementHandler,
-        "varcheck" to namedElementHandler,
-        "deadcode" to namedElementHandler,
-        "unused" to namedElementHandler,
+val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "ineffassign" to ineffassignHandler,
         "scopelint" to scopelintHandler,
         "gocritic" to gocriticHandler,
@@ -321,4 +339,7 @@ val quickFixHandler = mapOf(
         "maligned" to malignedHandler,
         "unparam" to unparamHandler,
         "dupl" to duplHandler
-)
+    ).apply {
+        this.putAll(listOf("structcheck", "varcheck", "deadcode", "unused").map { it to namedElementHandler })
+        this.putAll(funcLinters.map { it to funcNoLintHandler(it) })
+    }
