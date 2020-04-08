@@ -1,6 +1,7 @@
 package com.ypwang.plugin
 
 import com.goide.configuration.GoSdkConfigurable
+import com.goide.project.GoApplicationLibrariesService
 import com.goide.project.GoProjectLibrariesService
 import com.goide.psi.GoFile
 import com.goide.sdk.GoSdkService
@@ -154,10 +155,11 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         // ====================================================================================================================================
 
         // try best to get GOPATH, as GoLand or Intellij's go plugin have to know the correct 'GOPATH' for inspections,
-        // ful GOPATH should be: IDE project GOPATH + Global GOPATH
+        // full GOPATH should be: IDE project GOPATH + Global GOPATH
         val goPluginSettings = GoProjectLibrariesService.getInstance(manager.project)
-        val goPaths = goPluginSettings.state.urls.map { Paths.get(VirtualFileManager.extractPath(it)).toString() }.let {
-            if (goPluginSettings.isUseGoPathFromSystemEnvironment && systemGoPath != null) it + systemGoPath
+        val goPaths = goPluginSettings.libraryRootUrls.map { Paths.get(VirtualFileManager.extractPath(it)).toString() }.let {
+            if (goPluginSettings.isUseGoPathFromSystemEnvironment)
+                it + GoApplicationLibrariesService.getInstance().libraryRootUrls.map { p -> Paths.get(VirtualFileManager.extractPath(p)).toString() } + systemGoPath
             else it
         }.joinToString(File.pathSeparator)
 
@@ -172,16 +174,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 envPath = "$goBin${File.pathSeparator}$envPath"
         }
 
-        val (issues, success) =
-                processResult(
-                        execute(
-                                module,
-                                buildParameters(manager.project),
-                                mapOf("PATH" to envPath, "GOPATH" to goPaths)
-                        ),
-                        manager.project,
-                        module
-                )
+        val (issues, success) = runAndProcessResult(manager.project, module, envPath, goPaths)
         if (success) {
             synchronized(cache) {
                 cache[module] = System.currentTimeMillis() to issues
@@ -302,7 +295,11 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         return workload.result!!
     }
 
-    private fun processResult(processResult: RunProcessResult, project: Project, module: String): Pair<List<LintIssue>?, Boolean> {
+    private fun runAndProcessResult(project: Project, module: String, envPath: String, goPaths: String): Pair<List<LintIssue>?, Boolean> {
+        val parameters = buildParameters(project)
+        val envs = mapOf("PATH" to envPath, "GOPATH" to goPaths)
+        val processResult = execute(module, parameters, envs)
+
         when (processResult.returnCode) {
             // 0: no hint found; 1: hint found
             0, 1 -> return GolangCiOutputParser.parseIssues(processResult) to true
@@ -313,6 +310,8 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 val now = System.currentTimeMillis()
                 // freq cap 1min
                 if (showError && (notificationLastTime.get() + notificationFrequencyCap) < now) {
+                    logger.warn("Debug command: ${ buildCommand(module, envs, parameters) }")
+
                     val notification = when {
                         processResult.stderr.contains("buildssa: analysis skipped") || processResult.stderr.contains("typechecking error") ->
                             // syntax error or package not found, programmer should fix that first

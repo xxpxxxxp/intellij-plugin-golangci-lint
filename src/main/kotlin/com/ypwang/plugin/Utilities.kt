@@ -12,6 +12,7 @@ import org.apache.http.client.methods.HttpGet
 import org.apache.http.impl.client.HttpClientBuilder
 import java.io.*
 import java.lang.Exception
+import java.lang.StringBuilder
 import java.nio.charset.Charset
 import java.nio.file.Paths
 import java.util.zip.GZIPInputStream
@@ -186,3 +187,16 @@ private fun copy(input: InputStream, to: String, totalSize: Long, setFraction: (
         }
     }
 }
+
+fun buildCommand(module: String, envs: Map<String, String>, parameters: List<String>): String =
+        StringBuilder().apply {
+            this.append("cd $module && ")     // open into working dir
+            if (SystemInfo.isWindows) {
+                for ((k, v) in envs)
+                    this.append("set \"$k=$v\" && ")
+            } else {
+                for ((k, v) in envs)                        // set env
+                    this.append("export $k=$v && ")
+            }
+            this.append(parameters.joinToString(" "))
+        }.toString()
