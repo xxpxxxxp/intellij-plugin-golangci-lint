@@ -188,7 +188,7 @@ private fun copy(input: InputStream, to: String, totalSize: Long, setFraction: (
     }
 }
 
-fun buildCommand(module: String, envs: Map<String, String>, parameters: List<String>): String =
+fun buildCommand(module: String, parameters: List<String>, envs: Map<String, String>): String =
         StringBuilder().apply {
             this.append("cd $module && ")     // open into working dir
             if (SystemInfo.isWindows) {

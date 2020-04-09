@@ -2,6 +2,7 @@ package com.ypwang.plugin
 
 import com.goide.configuration.GoSdkConfigurable
 import com.goide.project.GoApplicationLibrariesService
+import com.goide.project.GoModuleSettings
 import com.goide.project.GoProjectLibrariesService
 import com.goide.psi.GoFile
 import com.goide.sdk.GoSdkService
@@ -15,6 +16,7 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
+import com.intellij.openapi.module.ModuleUtilCore
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
@@ -142,9 +144,9 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             }
 
             if (
-            // don't run linter when hot editing, as that will cause typing lagged
-            // while if we have previous result, it's better than nothing to return those results
-            // issues not in dirty zone could still be useful
+                    // don't run linter when hot editing, as that will cause typing lagged
+                    // while if we have previous result, it's better than nothing to return those results
+                    // issues not in dirty zone could still be useful
                     !isSaved(file) ||
                     // cached result is newer than both last config saved time and this file's last modified time
                     (issueWithTTL != null && file.virtualFile.timeStamp < issueWithTTL.first && GoLinterSettings.getLastSavedTime() < issueWithTTL.first))
@@ -153,28 +155,8 @@ class GoLinterLocalInspection : LocalInspectionTool() {
 
         // cache not found or outdated
         // ====================================================================================================================================
-
-        // try best to get GOPATH, as GoLand or Intellij's go plugin have to know the correct 'GOPATH' for inspections,
-        // full GOPATH should be: IDE project GOPATH + Global GOPATH
-        val goPluginSettings = GoProjectLibrariesService.getInstance(manager.project)
-        val goPaths = goPluginSettings.libraryRootUrls.map { Paths.get(VirtualFileManager.extractPath(it)).toString() }.let {
-            if (goPluginSettings.isUseGoPathFromSystemEnvironment)
-                it + GoApplicationLibrariesService.getInstance().libraryRootUrls.map { p -> Paths.get(VirtualFileManager.extractPath(p)).toString() } + systemGoPath
-            else it
-        }.joinToString(File.pathSeparator)
-
-        var envPath = systemPath
-        val goExecutable = GoSdkService.getInstance(manager.project).getSdk(null).goExecutablePath
-        if (goExecutable != null) {
-            // for Mac users: OSX is using different PATH for terminal & GUI, Intellij seems cannot inherit '/usr/local/bin' as PATH
-            // that cause problem because golangci-lint depends on `go env` to discover GOPATH (I don't know why they do this)
-            // add Go plugin's SDK path to PATH if needed in order to make golangci-lint happy
-            val goBin = Paths.get(goExecutable).parent.toString()
-            if (!envPath.contains(goBin))
-                envPath = "$goBin${File.pathSeparator}$envPath"
-        }
-
-        val (issues, success) = runAndProcessResult(manager.project, module, envPath, goPaths)
+        val project = manager.project
+        val (issues, success) = runAndProcessResult(project, module, buildParameters(file, project), buildEnvironment(project))
         if (success) {
             synchronized(cache) {
                 cache[module] = System.currentTimeMillis() to issues
@@ -183,14 +165,33 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         return issues?.let { matchAndShow(file, manager, isOnTheFly, it, matchName) }
     }
 
-    private fun buildParameters(project: Project): List<String> {
+    private fun buildParameters(file: PsiFile, project: Project): List<String> {
         // build parameters
         val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
         val provides = mutableSetOf<String>()
 
-        if (GoLinterConfig.customOptions.isEmpty()) {
-            parameters.add(GoLinterConfig.customOptions)
-            provides.addAll(GoLinterConfig.customOptions.split(" "))
+        if (GoLinterConfig.customOptions.isNotEmpty()) {
+            val breaks = GoLinterConfig.customOptions.split(" ")
+            parameters.addAll(breaks)
+            provides.addAll(breaks)
+        }
+
+        if (!provides.contains("--build-tags")) {
+            val module = ModuleUtilCore.findModuleForFile(file)
+            if (module != null) {
+                val buildTagsSettings = GoModuleSettings.getInstance(module).buildTargetSettings
+                val default = "default"
+                val buildTags = mutableListOf<String>().apply {
+                    if (buildTagsSettings.arch != default) this.add(buildTagsSettings.arch)
+                    if (buildTagsSettings.os != default) this.add(buildTagsSettings.os)
+                    this.addAll(buildTagsSettings.customFlags)
+                }
+
+                if (buildTags.isNotEmpty()) {
+                    parameters.add("--build-tags")
+                    parameters.add(buildTags.joinToString(","))
+                }
+            }
         }
 
         // don't use to much CPU
@@ -223,6 +224,30 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         parameters.add(".")
 
         return parameters
+    }
+
+    private fun buildEnvironment(project: Project): Map<String, String> {
+        // try best to get GOPATH, as GoLand or Intellij's go plugin have to know the correct 'GOPATH' for inspections,
+        // full GOPATH should be: IDE project GOPATH + Global GOPATH
+        val goPluginSettings = GoProjectLibrariesService.getInstance(project)
+        val goPaths = goPluginSettings.libraryRootUrls.map { Paths.get(VirtualFileManager.extractPath(it)).toString() }.let {
+            if (goPluginSettings.isUseGoPathFromSystemEnvironment)
+                it + GoApplicationLibrariesService.getInstance().libraryRootUrls.map { p -> Paths.get(VirtualFileManager.extractPath(p)).toString() } + systemGoPath
+            else it
+        }.joinToString(File.pathSeparator)
+
+        var envPath = systemPath
+        val goExecutable = GoSdkService.getInstance(project).getSdk(null).goExecutablePath
+        if (goExecutable != null) {
+            // for Mac users: OSX is using different PATH for terminal & GUI, Intellij seems cannot inherit '/usr/local/bin' as PATH
+            // that cause problem because golangci-lint depends on `go env` to discover GOPATH (I don't know why they do this)
+            // add Go plugin's SDK path to PATH if needed in order to make golangci-lint happy
+            val goBin = Paths.get(goExecutable).parent.toString()
+            if (!envPath.contains(goBin))
+                envPath = "$goBin${File.pathSeparator}$envPath"
+        }
+
+        return mapOf("PATH" to envPath, "GOPATH" to goPaths)
     }
 
     // executionLock must be hold during the whole time of execution
@@ -295,11 +320,8 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         return workload.result!!
     }
 
-    private fun runAndProcessResult(project: Project, module: String, envPath: String, goPaths: String): Pair<List<LintIssue>?, Boolean> {
-        val parameters = buildParameters(project)
-        val envs = mapOf("PATH" to envPath, "GOPATH" to goPaths)
-        val processResult = execute(module, parameters, envs)
-
+    private fun runAndProcessResult(project: Project, module: String, parameters: List<String>, env: Map<String, String>): Pair<List<LintIssue>?, Boolean> {
+        val processResult = execute(module, parameters, env)
         when (processResult.returnCode) {
             // 0: no hint found; 1: hint found
             0, 1 -> return GolangCiOutputParser.parseIssues(processResult) to true
@@ -310,7 +332,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 val now = System.currentTimeMillis()
                 // freq cap 1min
                 if (showError && (notificationLastTime.get() + notificationFrequencyCap) < now) {
-                    logger.warn("Debug command: ${ buildCommand(module, envs, parameters) }")
+                    logger.warn("Debug command: ${ buildCommand(module, parameters, env) }")
 
                     val notification = when {
                         processResult.stderr.contains("buildssa: analysis skipped") || processResult.stderr.contains("typechecking error") ->
@@ -395,7 +417,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
 
     private fun matchAndShow(file: PsiFile, manager: InspectionManager, isOnTheFly: Boolean, issues: List<LintIssue>, matchName: String): Array<ProblemDescriptor>? {
         val document = PsiDocumentManager.getInstance(manager.project).getDocument(file) ?: return null
-        var lineShift = -1      // line that linter reported is 1-based
+        var lineShift = -1      // linter reported line is 1-based
         var shiftCount = 0
         val beforeDirtyZone = mutableListOf<ProblemDescriptor>()
         val afterDirtyZone = mutableListOf<ProblemDescriptor>()
@@ -403,8 +425,9 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         for (issue in issues.filter { it.Pos.Filename == matchName }) {
             var lineNumber = issue.Pos.Line + lineShift
             if (issue.SourceLines != null       // for 'unused', SourceLines is null, unable to determine line shift, just skip them
+                    && lineNumber < document.lineCount
                     && issue.SourceLines.first() !=
-                    document.getText(TextRange.create(document.getLineStartOffset(lineNumber), document.getLineEndOffset(lineNumber)))) {
+                            document.getText(TextRange.create(document.getLineStartOffset(lineNumber), document.getLineEndOffset(lineNumber)))) {
                 /** for a modification, line is added / changed / deleted
                  * which means, zone before / after dirty zone is not changed
                  * issues in clean zone may still useful
@@ -431,19 +454,20 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                 lineNumber = issue.Pos.Line + lineShift
             }
 
+            if (lineNumber >= document.lineCount) continue
+
             val handler = quickFixHandler.getOrDefault(issue.FromLinter, defaultHandler)
             val (quickFix, range) = handler.suggestFix(issue.FromLinter, file, document, issue, lineNumber)
 
             val zone = if (shiftCount == 0) beforeDirtyZone else afterDirtyZone
-            zone.add(
-                    manager.createProblemDescriptor(
-                            file,
-                            range,
-                            handler.description(issue),
-                            ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
-                            isOnTheFly,
-                            *quickFix
-                    ))
+            zone.add(manager.createProblemDescriptor(
+                    file,
+                    range,
+                    handler.description(issue),
+                    ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
+                    isOnTheFly,
+                    *quickFix
+            ))
         }
 
         beforeDirtyZone.addAll(afterDirtyZone)
