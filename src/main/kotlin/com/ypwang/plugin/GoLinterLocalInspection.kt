@@ -457,19 +457,22 @@ class GoLinterLocalInspection : LocalInspectionTool() {
             }
 
             if (lineNumber >= document.lineCount) continue
+            try {
+                val handler = quickFixHandler.getOrDefault(issue.FromLinter, defaultHandler)
+                val (quickFix, range) = handler.suggestFix(issue.FromLinter, file, document, issue, lineNumber)
 
-            val handler = quickFixHandler.getOrDefault(issue.FromLinter, defaultHandler)
-            val (quickFix, range) = handler.suggestFix(issue.FromLinter, file, document, issue, lineNumber)
-
-            val zone = if (shiftCount == 0) beforeDirtyZone else afterDirtyZone
-            zone.add(manager.createProblemDescriptor(
-                    file,
-                    range,
-                    handler.description(issue),
-                    ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
-                    isOnTheFly,
-                    *quickFix
-            ))
+                val zone = if (shiftCount == 0) beforeDirtyZone else afterDirtyZone
+                zone.add(manager.createProblemDescriptor(
+                        file,
+                        range,
+                        handler.description(issue),
+                        ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
+                        isOnTheFly,
+                        *quickFix
+                ))
+            } catch (_: AssertionError) {
+                // just ignore it
+            }
         }
 
         beforeDirtyZone.addAll(afterDirtyZone)
