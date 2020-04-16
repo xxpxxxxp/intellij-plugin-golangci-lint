@@ -337,7 +337,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                     logger.warn("Debug command: ${ buildCommand(module, parameters, env) }")
 
                     val notification = when {
-                        processResult.stderr.contains("buildssa: analysis skipped") || processResult.stderr.contains("typechecking error") ->
+                        processResult.stderr.contains("analysis skipped: errors in package") || processResult.stderr.contains("typechecking error") ->
                             // syntax error or package not found, programmer should fix that first
                             return null to false
                         processResult.stderr.contains("Can't read config") ->
