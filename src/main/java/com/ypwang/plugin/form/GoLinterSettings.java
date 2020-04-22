@@ -171,11 +171,11 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void setLinterExecutables(@NotNull String selected) {
         HashSet<String> items;
 
         if (!lintersInPath.contains(selected)) {
-            //noinspection unchecked
             items = (HashSet<String>) lintersInPath.clone();
             items.add(selected);
         } else items = lintersInPath;
