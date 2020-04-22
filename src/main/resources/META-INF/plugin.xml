@@ -6,28 +6,23 @@
 
     <description><![CDATA[
 <h1>Write code, write better code</h1>
-<p>This plugin provides golangci-lint inspection on-the-fly within Intellij/Goland</p>
-<h4>Like the plugin? Star me on <a href="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint">Github</a></h4>
+<p>This plugin provides golangci-lint inspection and autofix on-the-fly within Intellij/Goland</p>
+<h4>Like the plugin? Star on <a href="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint">Github</a></h4>
 <h4>Got an issue? Report to <a href="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/issues">Issue Tracker</a></h4>
 <h4>All credit goes to <a href="https://github.com/golangci/golangci-lint/graphs/contributors">GolangCI-Lint authors</a></h4>
 <p>GolangCI-Lint is a linters aggregator. It performs a static code analysis to find some common issues and code style violations and provides fixes which can be applied to your code.</p>
 ]]></description>
 
-    <idea-version since-build="193"/>
+    <idea-version since-build="193.3210"/>
 
     <!-- please see http://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
          on how to target different products -->
     <depends>com.intellij.modules.lang</depends>
     <depends>org.jetbrains.plugins.go</depends>
 
-    <project-components>
-        <component>
-            <implementation-class>com.ypwang.plugin.GoLinterSettingsTracker</implementation-class>
-        </component>
-    </project-components>
-
     <extensions defaultExtensionNs="com.intellij">
         <projectConfigurable groupId="tools" displayName="Go Linter" id="preference.GoLinterConfigurable" instance="com.ypwang.plugin.form.GoLinterSettings" />
+        <postStartupActivity implementation="com.ypwang.plugin.GoLinterSettingsTracker"/>
         <!-- Add your extensions here -->
         <localInspection displayName="Linter" groupPath="Go" id="GoLinterLocal" language="go"
                          groupName="Code style issues" enabledByDefault="true" level="WARNING"

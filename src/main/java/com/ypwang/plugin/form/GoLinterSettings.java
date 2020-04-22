@@ -69,7 +69,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     private boolean modified = false;
     private HashSet<String> lintersInPath;
-    private Project curProject;
+    private final Project curProject;
     private String linterPathSelected;
     private String configFile = "";     // not suppose to change in current dialog
 

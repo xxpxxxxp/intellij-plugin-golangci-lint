@@ -11,7 +11,6 @@ import com.intellij.ide.DataManager
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.TransactionGuard
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.TextEditor
@@ -73,16 +72,14 @@ class GoIntroduceConstStringLiteralFix(
             // finally, perform rename on the replaced literal
             DataManager.getInstance().dataContextFromFocusAsync.onSuccess { dataContext: DataContext? ->
                 ApplicationManager.getApplication().invokeLater({
-                    TransactionGuard.getInstance().submitTransaction(project, null, Runnable {
-                        val renameHandler = RenameHandlerRegistry.getInstance().getRenameHandler(dataContext!!)
-                        if (renameHandler != null) {
-                            renameHandler.invoke(project, arrayOf(constSpec), dataContext)
-                        } else {
-                            val renameRefactoringHandler = RefactoringActionHandlerFactory.getInstance().createRenameHandler()
-                            renameRefactoringHandler.invoke(project, arrayOf(constSpec), dataContext)
-                        }
-                    })
-                }, ModalityState.defaultModalityState())
+                    val renameHandler = RenameHandlerRegistry.getInstance().getRenameHandler(dataContext!!)
+                    if (renameHandler != null) {
+                        renameHandler.invoke(project, arrayOf(constSpec), dataContext)
+                    } else {
+                        val renameRefactoringHandler = RefactoringActionHandlerFactory.getInstance().createRenameHandler()
+                        renameRefactoringHandler.invoke(project, arrayOf(constSpec), dataContext)
+                    }
+                }, ModalityState.NON_MODAL)
             }
         } catch (e: Exception) {
             // ignore
