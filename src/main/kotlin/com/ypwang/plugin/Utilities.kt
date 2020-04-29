@@ -9,6 +9,7 @@ import com.ypwang.plugin.model.GithubRelease
 import com.ypwang.plugin.model.RunProcessResult
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.http.client.methods.HttpGet
+import org.apache.http.impl.client.CloseableHttpClient
 import org.apache.http.impl.client.HttpClientBuilder
 import java.io.*
 import java.lang.Exception
@@ -74,49 +75,58 @@ fun fetchProcessOutput(process: Process): RunProcessResult {
     return RunProcessResult(-1, "", "")
 }
 
-fun fetchLatestGoLinter(setText: (String) -> Unit, setFraction: (Double) -> Unit, cancelled: () -> Boolean): String {
-    HttpClientBuilder.create().disableContentCompression().build().use { httpClient ->
-        setText("Get latest release meta")
-        val latest = Gson().fromJson(
-                httpClient.execute(HttpGet("https://api.github.com/repos/golangci/golangci-lint/releases/latest")).use { response ->
+fun getLatestReleaseMeta(httpClient: CloseableHttpClient): GithubRelease =
+        Gson().fromJson(
+                httpClient.execute(HttpGet("https://api.github.com/repos/golangci/golangci-lint/releases/latest")) .use { response ->
                     CharStreams.toString(InputStreamReader(response.entity.content, Charset.defaultCharset()))
                 },
                 GithubRelease::class.java)
+
+fun getPlatformSpecificBinName(meta: GithubRelease): String {
+    val arch = System.getProperty("os.arch").let {
+        when (it) {
+            "x86" -> "386"
+            "amd64", "x86_64" -> "amd64"
+            else -> throw Exception("Unknown system arch: $it")
+        }
+    }
+
+    val postFix = when (OS) {
+        "windows" -> "zip"
+        "linux", "darwin" -> "tar.gz"
+        else -> throw Exception("Unknown system type: $OS")
+    }
+    return "$LinterName-${meta.name.substring(1)}-$OS-$arch.$postFix"
+}
+
+fun fetchLatestGoLinter(setText: (String) -> Unit, setFraction: (Double) -> Unit, cancelled: () -> Boolean): String {
+    HttpClientBuilder.create().disableContentCompression().build().use { httpClient ->
+        setText("Get latest release meta")
+        val latest = getLatestReleaseMeta(httpClient)
 
         setFraction(0.2)
         if (cancelled()) return ""
 
         val decompressFun: (String, String, (Double) -> Unit, () -> Boolean) -> Unit
         val tmpDir: String
-        val postFix: String
         val toFile: String
 
         when (OS) {
             "windows" -> {
                 decompressFun = ::unzip
                 tmpDir = System.getenv("TEMP")
-                postFix = "zip"
                 toFile = "$executionDir\\$linterExecutableName"
             }
             "linux", "darwin" -> {
                 decompressFun = ::untarball
                 tmpDir = "/tmp"
-                postFix = "tar.gz"
                 toFile = "$executionDir/$linterExecutableName"
             }
             else -> throw Exception("Unknown system type: $OS")
         }
 
-        val arch = System.getProperty("os.arch").let {
-            when (it) {
-                "x86" -> "386"
-                "amd64", "x86_64" -> "amd64"
-                else -> throw Exception("Unknown system arch: $it")
-            }
-        }
-
         // "golangci-lint-1.23.3-darwin-amd64.tar.gz"
-        val binaryFileName = "$LinterName-${latest.name.substring(1)}-$OS-$arch.$postFix"
+        val binaryFileName = getPlatformSpecificBinName(latest)
         val asset = latest.assets.single { it.name == binaryFileName }
         // "/tmp/golangci-lint-1.23.3-darwin-amd64.tar.gz"
         val tmp = Paths.get(tmpDir, binaryFileName).toString()
@@ -200,3 +210,11 @@ fun buildCommand(module: String, parameters: List<String>, envs: Map<String, Str
             }
             this.append(parameters.joinToString(" "))
         }.toString()
+
+fun getGolangCiVersion(path: String): String {
+    if (!File(GoLinterConfig.goLinterExe).canExecute()) return ""
+    val rst = GolangCiOutputParser.runProcess(listOf(path, "version"), null, mapOf())
+    if (rst.returnCode != 0) return ""
+    val regex = Regex("""golangci-lint has version ([\d.]+) built from \w+ on [\w-:]+\n""")
+    return regex.matchEntire(rst.stderr)?.let { it.groups[1]!!.value } ?: ""
+}

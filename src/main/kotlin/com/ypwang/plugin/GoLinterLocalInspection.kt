@@ -470,7 +470,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
                         isOnTheFly,
                         *quickFix
                 ))
-            } catch (_: AssertionError) {
+            } catch (_: Throwable) {
                 // just ignore it
             }
         }
