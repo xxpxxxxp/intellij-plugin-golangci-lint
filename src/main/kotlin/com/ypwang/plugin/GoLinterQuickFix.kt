@@ -200,9 +200,16 @@ private val golintHandler = object : ProblemHandler() {
                         else nonAvailableFix
                     }
                 }
-//                issue.Text == "func " -> {
-//
-//                }
+                issue.Text.startsWith("func ") -> {
+                    val match = Regex("""func ([\w\d_]+) should be ([\w\d_]+)""").matchEntire(issue.Text)
+                    if (match != null) {
+                        chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionDeclaration ->
+                            if (element.identifier.text == match.groups[1]!!.value)
+                                arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, match.groups[2]!!.value)) to element.identifier.textRange
+                            else nonAvailableFix
+                        }
+                    } else nonAvailableFix
+                }
                 issue.Text.startsWith("receiver name ") -> {
                     val searchPattern = "receiver name "
                     var begin = issue.Text.indexOf(searchPattern) + searchPattern.length
@@ -225,26 +232,16 @@ private val golintHandler = object : ProblemHandler() {
                         else nonAvailableFix
                     }
                 }
-                issue.Text == "don't use ALL_CAPS in Go names; use CamelCase" ->
-                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoConstDefinition ->
-                        // ALL_CAPS to CamelCase
-                        val replace = element.identifier.text
+                issue.Text == "don't use ALL_CAPS in Go names; use CamelCase" || issue.Text.startsWith("don't use underscores in Go names;") ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoNamedElement ->
+                        // to CamelCase
+                        val replace = element.identifier!!.text
                                 .split('_')
                                 .flatMap { it.withIndex().map { iv -> if (iv.index == 0) iv.value else iv.value.toLowerCase() } }
                                 .joinToString("")
 
-                        arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, replace)) to element.identifier.textRange
+                        arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, replace)) to element.identifier!!.textRange
                     }
-//                issue.Text == "don't use underscores in Go names; struct field" ->
-//                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoConstDefinition ->
-//                        // ALL_CAPS to CamelCase
-//                        val replace = element.identifier.text
-//                                .split('_')
-//                                .flatMap { it.withIndex().map { iv -> if (iv.index == 0) iv.value else iv.value.toLowerCase() } }
-//                                .joinToString("")
-//
-//                        arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, replace)) to element.identifier.textRange
-//                    }
                 else -> nonAvailableFix
             }
 }
