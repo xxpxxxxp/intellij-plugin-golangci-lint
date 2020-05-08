@@ -7,8 +7,6 @@
 
 ## What's this?
 
-### Details
-
 Starting from Go 1.13 the standard `error` type behaviour was changed: one `error` could be derived from another with `fmt.Errorf()` method using `%w` format specifier.
 
 So the errors hierarchy could be built for flexible and responsible errors processing.

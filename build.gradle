@@ -1,7 +1,7 @@
 plugins {
     id 'java'
-    id "org.jetbrains.intellij" version "0.4.18"
-    id 'org.jetbrains.kotlin.jvm' version '1.3.71'
+    id "org.jetbrains.intellij" version "0.4.20"
+    id 'org.jetbrains.kotlin.jvm' version '1.3.72'
 }
 
 static def gitTag() {
@@ -44,9 +44,9 @@ dependencies {
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-    version '2020.1'
+    version '2020.1.1'
     type 'IU'
-    plugins 'org.jetbrains.plugins.go:201.6668.60.126'
+    plugins 'org.jetbrains.plugins.go:201.7223.82.165'
     intellij.updateSinceUntilBuild false
 }
 
@@ -58,8 +58,25 @@ compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
 
+static def changeLog() {
+    def all = new File('change-notes.htm').text
+    def count = 0
+    def idx = -1
+
+    // keep at most 5 recent change logs
+    while (count < 6) {
+        idx = all.indexOf("<p>", idx+1)
+        if (idx == -1)
+            return all
+
+        count++
+    }
+
+    return all.substring(0, idx) + """\n<a href="https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/change-notes.htm">Previous...</a>"""
+}
+
 patchPluginXml {
-    changeNotes new File('change-notes.htm').text
+    changeNotes changeLog()
 }
 
 publishPlugin {

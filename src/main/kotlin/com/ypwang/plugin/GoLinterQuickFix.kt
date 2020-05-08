@@ -2,6 +2,7 @@ package com.ypwang.plugin
 
 import com.goide.inspections.GoInspectionUtil
 import com.goide.psi.*
+import com.goide.psi.impl.GoLiteralImpl
 import com.goide.quickfix.*
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.openapi.editor.Document
@@ -361,6 +362,7 @@ private val stylecheckHandler = object : ProblemHandler() {
                         if (element.left is GoLiteral) arrayOf<LocalQuickFix>(GoSwapBinaryExprFix(element)) to element.textRange
                         else nonAvailableFix
                     }
+                // escape invisible character
                 "ST1018" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoStringLiteral ->
                         val begin = issue.Text.indexOf('\'')
@@ -370,6 +372,13 @@ private val stylecheckHandler = object : ProblemHandler() {
                         arrayOf<LocalQuickFix>(GoReplaceInvisibleCharInStringFix(element, utfChar.substring(2).toInt(16))) to element.textRange
                     }
                 else -> nonAvailableFix
+            }
+}
+
+private val gomndHandler = object : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+            chainFindAndHandle(file, document, issue, overrideLine) { element: GoLiteralImpl ->
+                emptyLocalQuickFix to element.textRange
             }
 }
 
@@ -396,7 +405,8 @@ val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "godot" to godotHandler,
         "testpackage" to testpackageHandler,
         "goerr113" to goerr113Handler,
-        "stylecheck" to stylecheckHandler
+        "stylecheck" to stylecheckHandler,
+        "gomnd" to gomndHandler
     ).apply {
         this.putAll(listOf("structcheck", "varcheck", "deadcode", "unused").map { it to namedElementHandler })
         this.putAll(funcLinters.map { it to funcNoLintHandler(it) })
