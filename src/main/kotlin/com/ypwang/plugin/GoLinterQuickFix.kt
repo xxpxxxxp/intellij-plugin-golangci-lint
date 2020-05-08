@@ -2,12 +2,14 @@ package com.ypwang.plugin
 
 import com.goide.inspections.GoInspectionUtil
 import com.goide.psi.*
+import com.goide.psi.impl.GoLiteralImpl
 import com.goide.quickfix.*
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.psi.impl.source.tree.PsiCommentImpl
 import com.intellij.psi.impl.source.tree.PsiWhiteSpaceImpl
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.quickfix.*
@@ -38,7 +40,7 @@ private inline fun <reified T : PsiElement> chainFindAndHandle(
 }
 
 // they reports issue of whole function
-private val funcLinters = setOf("funlen", "gocognit", "gochecknoinits", "nakedret")
+private val funcLinters = setOf("funlen", "gocognit", "gochecknoinits", "gocyclo", "nakedret")
 
 abstract class ProblemHandler {
     fun suggestFix(linter: String, file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange> {
@@ -120,7 +122,7 @@ private val ineffassignHandler = object : ProblemHandler() {
 
 private val scopelintHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
-            arrayOf<LocalQuickFix>(GoScopeLintFakeFix()) to null
+            arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/scopelint.md")) to null
 }
 
 private val interfacerHandler = object : ProblemHandler() {
@@ -198,6 +200,9 @@ private val golintHandler = object : ProblemHandler() {
                         else nonAvailableFix
                     }
                 }
+//                issue.Text == "func " -> {
+//
+//                }
                 issue.Text.startsWith("receiver name ") -> {
                     val searchPattern = "receiver name "
                     var begin = issue.Text.indexOf(searchPattern) + searchPattern.length
@@ -230,6 +235,16 @@ private val golintHandler = object : ProblemHandler() {
 
                         arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, replace)) to element.identifier.textRange
                     }
+//                issue.Text == "don't use underscores in Go names; struct field" ->
+//                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoConstDefinition ->
+//                        // ALL_CAPS to CamelCase
+//                        val replace = element.identifier.text
+//                                .split('_')
+//                                .flatMap { it.withIndex().map { iv -> if (iv.index == 0) iv.value else iv.value.toLowerCase() } }
+//                                .joinToString("")
+//
+//                        arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, replace)) to element.identifier.textRange
+//                    }
                 else -> nonAvailableFix
             }
 }
@@ -319,6 +334,54 @@ private val malignedHandler = object : ProblemHandler() {
     }
 }
 
+private val godotHandler = object : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+            chainFindAndHandle(file, document, issue, overrideLine) { element: PsiCommentImpl ->
+                arrayOf<LocalQuickFix>(GoDotFix(element)) to element.textRange
+            }
+}
+
+private val testpackageHandler = object : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+            chainFindAndHandle(file, document, issue, overrideLine) { element: GoPackageClause ->
+                arrayOf<LocalQuickFix>(GoReplacePackageNameFix(element, element.identifier!!.text + "_test")) to element.identifier!!.textRange
+            }
+}
+
+private val goerr113Handler = object : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+            arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/goerr113.md")) to null
+}
+
+private val stylecheckHandler = object : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+            when (issue.Text.substring(0, issue.Text.indexOf(':'))) {
+                // don't use Yoda conditions
+                "ST1017" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoConditionalExpr ->
+                        if (element.left is GoLiteral) arrayOf<LocalQuickFix>(GoSwapBinaryExprFix(element)) to element.textRange
+                        else nonAvailableFix
+                    }
+                // escape invisible character
+                "ST1018" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoStringLiteral ->
+                        val begin = issue.Text.indexOf('\'')
+                        val end = issue.Text.indexOf('\'', begin + 1)
+                        val utfChar = issue.Text.substring(begin + 1, end)
+                        assert(utfChar.startsWith("\\u"))
+                        arrayOf<LocalQuickFix>(GoReplaceInvisibleCharInStringFix(element, utfChar.substring(2).toInt(16))) to element.textRange
+                    }
+                else -> nonAvailableFix
+            }
+}
+
+private val gomndHandler = object : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+            chainFindAndHandle(file, document, issue, overrideLine) { element: GoLiteralImpl ->
+                emptyLocalQuickFix to element.textRange
+            }
+}
+
 private fun funcNoLintHandler(linter: String): ProblemHandler =
         object : ProblemHandler() {
             override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
@@ -338,7 +401,12 @@ val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "goconst" to goconstHandler,
         "maligned" to malignedHandler,
         "unparam" to unparamHandler,
-        "dupl" to duplHandler
+        "dupl" to duplHandler,
+        "godot" to godotHandler,
+        "testpackage" to testpackageHandler,
+        "goerr113" to goerr113Handler,
+        "stylecheck" to stylecheckHandler,
+        "gomnd" to gomndHandler
     ).apply {
         this.putAll(listOf("structcheck", "varcheck", "deadcode", "unused").map { it to namedElementHandler })
         this.putAll(funcLinters.map { it to funcNoLintHandler(it) })
