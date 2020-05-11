@@ -22,7 +22,7 @@ class GoIntroduceConstStringLiteralFix(
         private val file: GoFile,
         private val literal: String
 ) : LocalQuickFix {
-    override fun getFamilyName(): String = "Introduce const string '$literal'"
+    override fun getFamilyName(): String = "Introduce const string $literal"
 
     // Buggy, need improve
     override fun applyFix(project: Project, descriptor: ProblemDescriptor) {

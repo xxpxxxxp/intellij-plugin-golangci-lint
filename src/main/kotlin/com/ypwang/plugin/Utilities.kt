@@ -19,12 +19,15 @@ import java.nio.file.Paths
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 
-const val LinterName = "golangci-lint"
+private const val LinterName = "golangci-lint"
+private const val notificationGroupName = "Go linter notifications"
 
 val logger = Logger.getInstance("go-linter")
-val notificationGroup = NotificationGroup.balloonGroup("Go linter notifications")
+val notificationGroup = NotificationGroup.findRegisteredGroup(notificationGroupName) ?: NotificationGroup.balloonGroup(notificationGroupName)
 val linterExecutableName = if (SystemInfo.isWindows) "$LinterName.exe" else LinterName
-val OS: String by lazy {
+val executionDir: String = if (SystemInfo.isWindows) System.getenv("PUBLIC") else "/usr/local/bin"
+
+private val OS: String by lazy {
     when {
         SystemInfo.isWindows -> "windows"
         SystemInfo.isLinux -> "linux"
@@ -32,8 +35,6 @@ val OS: String by lazy {
         else -> throw Exception("Unknown system type: ${SystemInfo.OS_NAME}")
     }
 }
-
-val executionDir: String = if (SystemInfo.isWindows) System.getenv("PUBLIC") else "/usr/local/bin"
 
 private class OutputReader(val inputStream: InputStream, val consumer: ByteArrayOutputStream) : Runnable {
     override fun run() = try {

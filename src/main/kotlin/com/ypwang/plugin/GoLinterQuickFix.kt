@@ -4,6 +4,7 @@ import com.goide.inspections.GoInspectionUtil
 import com.goide.psi.*
 import com.goide.psi.impl.GoLiteralImpl
 import com.goide.quickfix.*
+import com.ypwang.plugin.quickfix.GoReorderFuncReturnFix
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
@@ -44,20 +45,22 @@ private val funcLinters = setOf("funlen", "gocognit", "gochecknoinits", "gocyclo
 
 abstract class ProblemHandler {
     fun suggestFix(linter: String, file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange> {
-        var fix = try {
-            val (_fix, range) = doSuggestFix(file, document, issue, overrideLine)
+        val fix = try {
+            var (_fix, range) = doSuggestFix(file, document, issue, overrideLine)
+
+            // generally, if there's quick fix available, we won't suggest nolint
+            // and func linters will be take care separately
+            if (_fix.isEmpty() && linter !in funcLinters)
+                _fix = arrayOf(NoLintSingleLineCommentFix(linter))
+
             if (range != null)
                 return _fix to range
+
             _fix
         } catch (e: Exception) {
             // ignore
             emptyLocalQuickFix
         }
-
-        // generally, if there's quick fix available, we won't suggest nolint
-        // and func linters will be take care separately
-        if (fix.isEmpty() && linter !in funcLinters)
-            fix = arrayOf(NoLintSingleLineCommentFix(linter))
 
         val pos = calcPos(document, issue, overrideLine)
         return fix to TextRange.create(pos, maxOf(document.getLineEndOffset(overrideLine), pos))
@@ -178,6 +181,19 @@ private val gocriticHandler = object : ProblemHandler() {
                             arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, text[0].toLowerCase() + text.substring(1))) to element.identifier.textRange
                         else nonAvailableFix
                     }
+                issue.Text == "elseif: can replace 'else {if cond {}}' with 'else if cond {}'" -> {
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoElseStatement ->
+                        if (element.block?.statementList?.size == 1)
+                            arrayOf<LocalQuickFix>(GoOutdentInnerIfFix(element)) to element.textRange
+                        else nonAvailableFix
+                    }
+                }
+//                issue.Text == "singleCaseSwitch: should rewrite switch statement to if statement" ->
+//                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoSwitchStatement ->
+//                        // cannot handle typed-switch statement because that introduce new variable
+//                        (if (element is GoExprSwitchStatement) arrayOf<LocalQuickFix>(GoSingleCaseSwitchFix(element))
+//                        else emptyLocalQuickFix) to element.textRange
+//                    }
                 else -> nonAvailableFix
             }
 }
@@ -242,6 +258,14 @@ private val golintHandler = object : ProblemHandler() {
 
                         arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, replace)) to element.identifier!!.textRange
                     }
+                issue.Text == "`if` block ends with a `return` statement, so drop this `else` and outdent its block" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoElseStatement ->
+                        arrayOf<LocalQuickFix>(GoOutdentElseFix(element)) to element.textRange
+                    }
+                issue.Text == "error should be the last type when returning multiple items" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionOrMethodDeclaration ->
+                        arrayOf<LocalQuickFix>(GoReorderFuncReturnFix(element)) to element.signature!!.result!!.textRange
+                    }
                 else -> nonAvailableFix
             }
 }
@@ -268,7 +292,7 @@ private val whitespaceHandler = object : ProblemHandler() {
 
         val start = document.getLineStartOffset(issue.LineRange.From + shift)
         val end = document.getLineEndOffset(issue.LineRange.To + shift)
-        if (elements.isNotEmpty()) return arrayOf<LocalQuickFix>(GoDeleteElementsFix(elements)) to TextRange(start, end)
+        if (elements.isNotEmpty()) return arrayOf<LocalQuickFix>(GoDeleteWhiteSpaceFix(elements)) to TextRange(start, end)
 
         return nonAvailableFix
     }
@@ -341,7 +365,7 @@ private val godotHandler = object : ProblemHandler() {
 private val testpackageHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             chainFindAndHandle(file, document, issue, overrideLine) { element: GoPackageClause ->
-                arrayOf<LocalQuickFix>(GoReplacePackageNameFix(element, element.identifier!!.text + "_test")) to element.identifier!!.textRange
+                arrayOf<LocalQuickFix>(GoRenamePackageFix(element, element.identifier!!.text + "_test")) to element.identifier!!.textRange
             }
 }
 
@@ -379,6 +403,24 @@ private val gomndHandler = object : ProblemHandler() {
             }
 }
 
+private val staticcheckHandler = object : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+            when (issue.Text.substring(0, issue.Text.indexOf(':'))) {
+                "SA9003" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoStatement ->
+                        arrayOf<LocalQuickFix>(GoDeleteElementFix(element, "statement")) to element.textRange
+                    }
+                else -> nonAvailableFix
+            }
+}
+
+private val goprintffuncnameHandler = object : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+            chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionOrMethodDeclaration ->
+                arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, "${element.identifier!!.text}f")) to element.identifier!!.textRange
+            }
+}
+
 private fun funcNoLintHandler(linter: String): ProblemHandler =
         object : ProblemHandler() {
             override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
@@ -403,7 +445,9 @@ val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "testpackage" to testpackageHandler,
         "goerr113" to goerr113Handler,
         "stylecheck" to stylecheckHandler,
-        "gomnd" to gomndHandler
+        "gomnd" to gomndHandler,
+        "staticcheck" to staticcheckHandler,
+        "goprintffuncname" to goprintffuncnameHandler
     ).apply {
         this.putAll(listOf("structcheck", "varcheck", "deadcode", "unused").map { it to namedElementHandler })
         this.putAll(funcLinters.map { it to funcNoLintHandler(it) })

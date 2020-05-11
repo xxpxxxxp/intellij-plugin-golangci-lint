@@ -14,7 +14,7 @@ All credit goes to [GolangCI-Lint authors](https://github.com/golangci/golangci-
 A lot of code pieces copied from [clion-clangtidy](https://bitbucket.org/baldur/clion-clangtidy/src/default/), [kotlin](https://github.com/JetBrains/kotlin), and [Goland plugin](https://plugins.jetbrains.com/plugin/9568-go) itself.
 
 ## How to use
-After the plugin being installed, you can see a popup on IDEA startup, or go to settings directly:
+After the plugin installed, you can see a popup on IDEA startup, or go to settings directly:
 
 ![](explanation/init.png)
 

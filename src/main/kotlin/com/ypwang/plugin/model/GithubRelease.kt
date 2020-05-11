@@ -16,5 +16,6 @@ class GithubRelease(
         val url: String,
         val name: String,
         @SerializedName("prerelease") val preRelease: Boolean,
-        val assets: List<GithubAsset>
+        val assets: List<GithubAsset>,
+        val body: String
 )
