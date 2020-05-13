@@ -181,6 +181,12 @@ private val gocriticHandler = object : ProblemHandler() {
                             arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, text[0].toLowerCase() + text.substring(1))) to element.identifier.textRange
                         else nonAvailableFix
                     }
+                issue.Text.startsWith("underef:") ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoParenthesesExpr ->
+                        if (element.expression is GoUnaryExpr)
+                            arrayOf<LocalQuickFix>(GoDerefFix(element)) to element.textRange
+                        else nonAvailableFix
+                    }
                 issue.Text == "elseif: can replace 'else {if cond {}}' with 'else if cond {}'" -> {
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoElseStatement ->
                         if (element.block?.statementList?.size == 1)
@@ -201,50 +207,11 @@ private val gocriticHandler = object : ProblemHandler() {
 private val golintHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             when {
-                issue.Text.startsWith("var ") || issue.Text.startsWith("const ") -> {
-                    var begin = issue.Text.indexOf('`')
-                    var end = issue.Text.indexOf('`', begin + 1)
-                    val curName = issue.Text.substring(begin + 1, end)
-
-                    begin = issue.Text.indexOf('`', end + 1)
-                    end = issue.Text.indexOf('`', begin + 1)
-                    val newName = issue.Text.substring(begin + 1, end)
-
-                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoNamedElement ->
-                        if (element.text == curName)
-                            arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, newName)) to element.identifier?.textRange
-                        else nonAvailableFix
-                    }
-                }
-                issue.Text.startsWith("func ") -> {
-                    val match = Regex("""func ([\w\d_]+) should be ([\w\d_]+)""").matchEntire(issue.Text)
-                    if (match != null) {
-                        chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionDeclaration ->
-                            if (element.identifier.text == match.groups[1]!!.value)
-                                arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, match.groups[2]!!.value)) to element.identifier.textRange
-                            else nonAvailableFix
-                        }
-                    } else nonAvailableFix
-                }
-                issue.Text.startsWith("receiver name ") -> {
-                    val searchPattern = "receiver name "
-                    var begin = issue.Text.indexOf(searchPattern) + searchPattern.length
-                    val curName = issue.Text.substring(begin, issue.Text.indexOf(' ', begin))
-
-                    begin = issue.Text.indexOf(searchPattern, begin + 1) + searchPattern.length
-                    val newName = issue.Text.substring(begin, issue.Text.indexOf(' ', begin))
-                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoMethodDeclaration ->
-                        val receiver = element.receiver
-                        if (receiver != null && receiver.identifier!!.text == curName) {
-                            arrayOf<LocalQuickFix>(GoRenameToQuickFix(receiver, newName)) to receiver.identifier?.textRange
-                        } else nonAvailableFix
-                    }
-                }
-                issue.Text.startsWith("type name will be used as ") -> {
+                issue.Text.startsWith("type name will be used as ") || issue.Text.startsWith("func name will be used as ") -> {
                     val newName = issue.Text.substring(issue.Text.lastIndexOf(' ') + 1)
-                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoTypeSpec ->
-                        if (element.identifier.text.startsWith(element.containingFile.packageName ?: "", true))
-                            arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, newName)) to element.identifier.textRange
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoNamedElement ->
+                        if (element.identifier!!.text.startsWith(element.containingFile.packageName ?: "", true))
+                            arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, newName)) to element.identifier!!.textRange
                         else nonAvailableFix
                     }
                 }
@@ -266,6 +233,45 @@ private val golintHandler = object : ProblemHandler() {
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionOrMethodDeclaration ->
                         arrayOf<LocalQuickFix>(GoReorderFuncReturnFix(element)) to element.signature!!.result!!.textRange
                     }
+                issue.Text.startsWith("var ") || issue.Text.startsWith("const ") || issue.Text.startsWith("type ") || issue.Text.startsWith("struct field ") -> {
+                    var begin = issue.Text.indexOf('`')
+                    var end = issue.Text.indexOf('`', begin + 1)
+                    val curName = issue.Text.substring(begin + 1, end)
+
+                    begin = issue.Text.indexOf('`', end + 1)
+                    end = issue.Text.indexOf('`', begin + 1)
+                    val newName = issue.Text.substring(begin + 1, end)
+
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoNamedElement ->
+                        if (element.identifier?.text == curName)
+                            arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, newName)) to element.identifier?.textRange
+                        else nonAvailableFix
+                    }
+                }
+                issue.Text.startsWith("func ") || issue.Text.startsWith("method ") -> {
+                    val match = Regex("""(func|method) ([\w\d_]+) should be ([\w\d_]+)""").matchEntire(issue.Text)
+                    if (match != null) {
+                        chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionOrMethodDeclaration ->
+                            if (element.identifier?.text == match.groups[2]!!.value)
+                                arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, match.groups[3]!!.value)) to element.identifier?.textRange
+                            else nonAvailableFix
+                        }
+                    } else nonAvailableFix
+                }
+                issue.Text.startsWith("receiver name ") -> {
+                    val searchPattern = "receiver name "
+                    var begin = issue.Text.indexOf(searchPattern) + searchPattern.length
+                    val curName = issue.Text.substring(begin, issue.Text.indexOf(' ', begin))
+
+                    begin = issue.Text.indexOf(searchPattern, begin + 1) + searchPattern.length
+                    val newName = issue.Text.substring(begin, issue.Text.indexOf(' ', begin))
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoMethodDeclaration ->
+                        val receiver = element.receiver
+                        if (receiver != null && receiver.identifier!!.text == curName) {
+                            arrayOf<LocalQuickFix>(GoRenameToQuickFix(receiver, newName)) to receiver.identifier?.textRange
+                        } else nonAvailableFix
+                    }
+                }
                 else -> nonAvailableFix
             }
 }
@@ -377,6 +383,14 @@ private val goerr113Handler = object : ProblemHandler() {
 private val stylecheckHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             when (issue.Text.substring(0, issue.Text.indexOf(':'))) {
+                // error strings should not be capitalized
+                "ST1005" -> {
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoArgumentList ->
+                        val formatString = element.expressionList.first()
+                        if (formatString is GoStringLiteral) arrayOf<LocalQuickFix>(GoDecapitalizeStringFix(formatString)) to formatString.textRange
+                        else nonAvailableFix
+                    }
+                }
                 // don't use Yoda conditions
                 "ST1017" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoConditionalExpr ->
@@ -409,6 +423,16 @@ private val staticcheckHandler = object : ProblemHandler() {
                 "SA9003" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoStatement ->
                         arrayOf<LocalQuickFix>(GoDeleteElementFix(element, "statement")) to element.textRange
+                    }
+                "SA4006" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoReferenceExpression ->
+                        // get the variable
+                        val begin = issue.Text.indexOf('`')
+                        val end = issue.Text.indexOf('`', begin + 1)
+                        val variable = issue.Text.substring(begin + 1, end)
+                        if (element.text == variable)
+                            arrayOf<LocalQuickFix>(GoReferenceRenameToBlankQuickFix(element)) to element.identifier.textRange
+                        else nonAvailableFix
                     }
                 else -> nonAvailableFix
             }
