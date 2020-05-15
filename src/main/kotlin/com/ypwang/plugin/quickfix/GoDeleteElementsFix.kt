@@ -5,8 +5,8 @@ import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 
-class GoDeleteWhiteSpaceFix(private val elements: List<PsiElement>): LocalQuickFix {
-    override fun getFamilyName(): String = "Remove whitespace"
+class GoDeleteElementsFix(private val elements: List<PsiElement>, private val _text: String): LocalQuickFix {
+    override fun getFamilyName(): String = _text
 
     override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
         elements.forEach { it.delete() }

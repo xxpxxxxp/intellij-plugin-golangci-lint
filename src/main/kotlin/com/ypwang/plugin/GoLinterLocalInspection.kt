@@ -170,7 +170,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
         val provides = mutableSetOf<String>()
 
-        if (GoLinterConfig.customOptions.isNotEmpty()) {
+        if (GoLinterConfig.useCustomOptions && GoLinterConfig.customOptions.isNotEmpty()) {
             val breaks = GoLinterConfig.customOptions.split(" ")
             parameters.addAll(breaks)
             provides.addAll(breaks)
@@ -458,7 +458,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
 
             if (lineNumber >= document.lineCount) continue
             try {
-                val handler = quickFixHandler.getOrDefault(issue.FromLinter, defaultHandler)
+                val handler = quickFixHandler.getOrDefault(issue.FromLinter, DefaultHandler)
                 val (quickFix, range) = handler.suggestFix(issue.FromLinter, file, document, issue, lineNumber)
 
                 val zone = if (shiftCount == 0) beforeDirtyZone else afterDirtyZone

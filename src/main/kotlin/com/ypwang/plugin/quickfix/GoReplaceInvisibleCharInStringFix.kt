@@ -6,7 +6,6 @@ import com.intellij.codeInspection.LocalQuickFixOnPsiElement
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
-import java.lang.StringBuilder
 
 class GoReplaceInvisibleCharInStringFix(element: GoStringLiteral, private val hex: Int): LocalQuickFixOnPsiElement(element) {
     override fun getFamilyName() = text

@@ -18,7 +18,7 @@ object GoLinterConfig {
         }
 
     var enabledLinters: Array<String>?
-        get() = properties.getValues(GO_ENABLED_LINTERS)
+        get() = properties.getValues(GO_ENABLED_LINTERS) as Array<String>?
         set(value) = properties.setValues(GO_ENABLED_LINTERS, value)
 
     var useCustomOptions: Boolean

@@ -6,8 +6,8 @@ import com.intellij.openapi.project.Project
 import java.awt.Desktop
 import java.net.URL
 
-class GoBringToExplanationFix(private val url: String): LocalQuickFix {
-    override fun getFamilyName(): String = "What is it?"
+class GoBringToExplanationFix(private val url: String, private val _text: String = "What is it?"): LocalQuickFix {
+    override fun getFamilyName(): String = _text
 
     override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
         Desktop.getDesktop().browse(URL(url).toURI())
