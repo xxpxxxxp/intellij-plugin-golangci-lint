@@ -8,6 +8,7 @@ object GoLinterConfig {
     private const val GO_USE_CUSTOM_OPTIONS = "go-use-custom-options"
     private const val GO_CUSTOM_OPTIONS = "go-custom-options"
     private const val GO_USE_CONFIG_FILE = "go-use-config-file"
+    private const val CHECK_GO_LINTER_EXE = "check-golangci-lint"
 
     private val properties = PropertiesComponent.getInstance()
 
@@ -32,4 +33,8 @@ object GoLinterConfig {
     var useConfigFile: Boolean
         get() = properties.getBoolean(GO_USE_CONFIG_FILE, false)
         set(value) = properties.setValue(GO_USE_CONFIG_FILE, value)
+
+    var checkGoLinterExe
+        get() = properties.getBoolean(CHECK_GO_LINTER_EXE, true)
+        set(value) = properties.setValue(CHECK_GO_LINTER_EXE, value)
 }

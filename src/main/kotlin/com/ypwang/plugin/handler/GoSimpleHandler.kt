@@ -22,6 +22,16 @@ object GoSimpleHandler : ProblemHandler() {
                             arrayOf<LocalQuickFix>(GoReplaceStatementFix(issue.Text.substring(18, issue.Text.length-8), element)) to element.textRange
                         else NonAvailableFix
                     }
+                // should use raw string (`...`) with regexp.MustCompile to avoid having to escape twice
+                "S1007" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoCallExpr ->
+                        if (element.expression.text.let { it == "regexp.MustCompile" || it == "regexp.Compile" } &&
+                                element.argumentList.expressionList.firstOrNull() is GoStringLiteral)
+                            element.argumentList.expressionList.first().let {
+                                arrayOf<LocalQuickFix>(GoUnEscapeStringFix(it as GoStringLiteral)) to it.textRange
+                            }
+                        else NonAvailableFix
+                    }
                 // should use 'return v == 1' instead of 'if v == 1 { return true }; return false'
                 "S1008" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoIfStatement ->

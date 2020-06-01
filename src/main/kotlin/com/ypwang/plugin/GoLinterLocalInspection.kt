@@ -10,6 +10,7 @@ import com.intellij.codeInspection.InspectionManager
 import com.intellij.codeInspection.LocalInspectionTool
 import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.codeInspection.ProblemHighlightType
+import com.intellij.codeInspection.ex.UnfairLocalInspectionTool
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationListener
 import com.intellij.notification.NotificationType
@@ -37,7 +38,7 @@ import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-class GoLinterLocalInspection : LocalInspectionTool() {
+class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool {
     companion object {
         private const val ErrorTitle = "Go linter running error"
         private const val notificationFrequencyCap = 60 * 1000L
@@ -219,7 +220,7 @@ class GoLinterLocalInspection : LocalInspectionTool() {
         if (!GoLinterConfig.useConfigFile && !customConfigDetected(project) && GoLinterConfig.enabledLinters != null) {
             parameters.add("--disable-all")
             parameters.add("-E")
-            parameters.add(GoLinterConfig.enabledLinters!!.joinToString(",") { it.split(' ').first() })
+            parameters.add(GoLinterConfig.enabledLinters!!.joinToString(","))
         }
         parameters.add(".")
 

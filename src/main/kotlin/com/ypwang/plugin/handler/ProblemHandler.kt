@@ -33,11 +33,11 @@ abstract class ProblemHandler {
         var element = file.findElementAt(calcPos(document, issue, overrideLine))
         while (true) {
             // jump out quicker
-            if (element is GoFile || element == null)
-                return NonAvailableFix
-            if (element is T)
-                return handler(element)
-            element = element.parent
+            when (element) {
+                is T -> return handler(element)
+                is GoFile, null -> return NonAvailableFix
+                else -> element = element.parent
+            }
         }
     }
 
