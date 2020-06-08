@@ -6,19 +6,21 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.ypwang.plugin.model.LintIssue
-import com.ypwang.plugin.quickfix.GoDecapitalizeStringFix
 import com.ypwang.plugin.quickfix.GoReferenceRenameToBlankQuickFix
-import com.ypwang.plugin.quickfix.GoReplaceInvisibleCharInStringFix
+import com.ypwang.plugin.quickfix.GoReplaceStringFix
 import com.ypwang.plugin.quickfix.GoSwapBinaryExprFix
+import org.apache.commons.lang.StringEscapeUtils
 
 object StyleCheckHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             when (issue.Text.substring(0, issue.Text.indexOf(':'))) {
                 // error strings should not be capitalized
                 "ST1005" -> {
-                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoArgumentList ->
-                        val formatString = element.expressionList.first()
-                        if (formatString is GoStringLiteral) arrayOf<LocalQuickFix>(GoDecapitalizeStringFix(formatString)) to formatString.textRange
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoCallExpr ->
+                        val formatString = element.argumentList.expressionList.first()
+                        if (formatString is GoStringLiteral) arrayOf<LocalQuickFix>(GoReplaceStringFix("Decapitalize string", formatString){
+                            "\"${StringEscapeUtils.escapeJava(it.decapitalize())}\""
+                        }) to formatString.textRange
                         else NonAvailableFix
                     }
                 }
@@ -35,7 +37,15 @@ object StyleCheckHandler : ProblemHandler() {
                         val end = issue.Text.indexOf('\'', begin + 1)
                         val utfChar = issue.Text.substring(begin + 1, end)
                         assert(utfChar.startsWith("\\u"))
-                        arrayOf<LocalQuickFix>(GoReplaceInvisibleCharInStringFix(element, utfChar.substring(2).toInt(16))) to element.textRange
+                        arrayOf<LocalQuickFix>(GoReplaceStringFix("Escape string", element) {
+                            val hex = utfChar.substring(2).toInt(16)
+                            val sb = StringBuilder()
+                            for (c in it) {
+                                if (c.toInt() == hex) sb.append("\\u${c.toInt().toString(16)}")
+                                else sb.append(c)
+                            }
+                            "\"$sb\""
+                        }) to element.textRange
                     }
                 // this value of `xxx` is never used
                 "SA4006" ->

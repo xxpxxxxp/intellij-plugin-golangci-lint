@@ -2,7 +2,7 @@ package com.ypwang.plugin
 
 import com.goide.psi.*
 import com.goide.psi.impl.GoLiteralImpl
-import com.goide.quickfix.*
+import com.goide.quickfix.GoRenameToQuickFix
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange

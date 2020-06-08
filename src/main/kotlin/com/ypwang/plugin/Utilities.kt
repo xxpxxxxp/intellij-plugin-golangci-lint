@@ -12,8 +12,6 @@ import org.apache.http.client.methods.HttpGet
 import org.apache.http.impl.client.CloseableHttpClient
 import org.apache.http.impl.client.HttpClientBuilder
 import java.io.*
-import java.lang.Exception
-import java.lang.StringBuilder
 import java.nio.charset.Charset
 import java.nio.file.Paths
 import java.util.zip.GZIPInputStream

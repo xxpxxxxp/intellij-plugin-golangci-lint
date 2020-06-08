@@ -1,6 +1,7 @@
 package com.ypwang.plugin.handler
 
 import com.goide.psi.*
+import com.goide.quickfix.GoDeleteRangeQuickFix
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
@@ -19,7 +20,22 @@ object GoSimpleHandler : ProblemHandler() {
                 "S1003", "S1004" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoSimpleStatement ->
                         if (element.leftHandExprList != null)
-                            arrayOf<LocalQuickFix>(GoReplaceStatementFix(issue.Text.substring(18, issue.Text.length-8), element)) to element.textRange
+                            arrayOf<LocalQuickFix>(GoReplaceStatementFix(issue.Text.substring(18, issue.Text.length - 8), element)) to element.textRange
+                        else NonAvailableFix
+                    }
+                "S1005" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoShortVarDeclaration ->
+                        if (element.varDefinitionList.size == 2 && element.varDefinitionList.last().text == "_")
+                            arrayOf<LocalQuickFix>(
+                                    GoDeleteRangeQuickFix(element.varDefinitionList.first().nextSibling, element.varDefinitionList.last(), "Remove '_'")
+                            ) to element.varDefinitionList.last().textRange
+                        else NonAvailableFix
+                    }
+                // should use for {} instead of for true {}
+                "S1006" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoForStatement ->
+                        if (element.expression?.text == "true")
+                            arrayOf<LocalQuickFix>(GoDeleteElementsFix(listOf(element.expression!!), "Remove condition 'true'")) to element.expression!!.textRange
                         else NonAvailableFix
                     }
                 // should use raw string (`...`) with regexp.MustCompile to avoid having to escape twice
@@ -28,7 +44,7 @@ object GoSimpleHandler : ProblemHandler() {
                         if (element.expression.text.let { it == "regexp.MustCompile" || it == "regexp.Compile" } &&
                                 element.argumentList.expressionList.firstOrNull() is GoStringLiteral)
                             element.argumentList.expressionList.first().let {
-                                arrayOf<LocalQuickFix>(GoUnEscapeStringFix(it as GoStringLiteral)) to it.textRange
+                                arrayOf<LocalQuickFix>(GoReplaceStringFix("Use raw string", it as GoStringLiteral){ s -> "`$s`" }) to it.textRange
                             }
                         else NonAvailableFix
                     }
@@ -47,13 +63,6 @@ object GoSimpleHandler : ProblemHandler() {
                             val textRange = TextRange(element.startOffset, cur.endOffset)
                             arrayOf<LocalQuickFix>(GoSimplifyIfReturnFix(element, cur, replace)) to textRange
                         }
-                        else NonAvailableFix
-                    }
-                // should use for {} instead of for true {}
-                "S1006" ->
-                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoForStatement ->
-                        if (element.expression?.text == "true")
-                            arrayOf<LocalQuickFix>(GoDeleteElementsFix(listOf(element.expression!!), "Remove condition 'true'")) to element.expression!!.textRange
                         else NonAvailableFix
                     }
                 // should use `time.Since` instead of `time.Now().Sub`

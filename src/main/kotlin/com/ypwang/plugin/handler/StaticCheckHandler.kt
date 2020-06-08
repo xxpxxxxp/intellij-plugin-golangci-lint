@@ -1,5 +1,6 @@
 package com.ypwang.plugin.handler
 
+import com.goide.psi.GoLiteral
 import com.goide.psi.GoReferenceExpression
 import com.goide.psi.GoStatement
 import com.intellij.codeInspection.LocalQuickFix
@@ -9,15 +10,11 @@ import com.intellij.psi.PsiFile
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.quickfix.GoDeleteElementsFix
 import com.ypwang.plugin.quickfix.GoReferenceRenameToBlankQuickFix
+import com.ypwang.plugin.quickfix.GoReplaceElementFix
 
 object StaticCheckHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             when (issue.Text.substring(0, issue.Text.indexOf(':'))) {
-                // empty branch
-                "SA9003" ->
-                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoStatement ->
-                        arrayOf<LocalQuickFix>(GoDeleteElementsFix(listOf(element), "Remove branch")) to element.textRange
-                    }
                 // this value of `xxx` is never used
                 "SA4006" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoReferenceExpression ->
@@ -28,6 +25,27 @@ object StaticCheckHandler : ProblemHandler() {
                         if (element.text == variable)
                             arrayOf<LocalQuickFix>(GoReferenceRenameToBlankQuickFix(element)) to element.identifier.textRange
                         else NonAvailableFix
+                    }
+                // file mode '777' evaluates to 01411; did you mean '0777'?"
+                "SA9002" -> {
+                    var begin = issue.Text.indexOf('\'')
+                    var end = issue.Text.indexOf('\'', begin + 1)
+                    val currentAssignment = issue.Text.substring(begin + 1, end)
+
+                    begin = issue.Text.indexOf('\'', end + 1)
+                    end = issue.Text.indexOf('\'', begin + 1)
+                    val replace = issue.Text.substring(begin + 1, end)
+
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoLiteral ->
+                        if (element.int?.text == currentAssignment)
+                            arrayOf<LocalQuickFix>(GoReplaceElementFix(replace, element, GoLiteral::class.java)) to element.textRange
+                        else NonAvailableFix
+                    }
+                }
+                // empty branch
+                "SA9003" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoStatement ->
+                        arrayOf<LocalQuickFix>(GoDeleteElementsFix(listOf(element), "Remove branch")) to element.textRange
                     }
                 else -> NonAvailableFix
             }
