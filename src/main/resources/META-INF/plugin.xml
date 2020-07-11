@@ -27,8 +27,5 @@
         <localInspection displayName="Golangci-Lint" groupPath="Go" id="GoLinterLocal" language="go"
                          groupName="General" enabledByDefault="true" level="WARNING"
                          implementationClass="com.ypwang.plugin.GoLinterLocalInspection"/>
-        <globalInspection displayName="Golangci-Lint" groupPath="Go" id="GoLinterGlobal" language="go"
-                          groupName="General" enabledByDefault="true" level="WARNING"
-                          implementationClass="com.ypwang.plugin.GoLinterGlobalInspection"/>
     </extensions>
 </idea-plugin>
