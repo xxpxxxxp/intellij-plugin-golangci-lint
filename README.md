@@ -5,7 +5,7 @@
 [![#Download](https://img.shields.io/jetbrains/plugin/d/12496-go-linter.svg)](https://plugins.jetbrains.com/plugin/12496-go-linter)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/50dd3264c0f74e85929d53bd780fcdfd)](https://app.codacy.com/manual/xxpxxxxp/intellij-plugin-golangci-lint?utm_source=github.com&utm_medium=referral&utm_content=xxpxxxxp/intellij-plugin-golangci-lint&utm_campaign=Badge_Grade_Dashboard)
 
-# Intellij/Golang Linter Inspection Plugin
+# Intellij/Goland Linter Inspection Plugin
 
 Write code, write better code
 
@@ -29,9 +29,8 @@ Click `OK`, you are all set!
 Please keep in mind that **golangci-lint** is a linter tool, **it only works if your project could build**, or it will report no issue.
 
 ### For Windows users
-goimports / gofmt linter needs diff tool, normally it's missing from the system.  
-You can download <a href="http://ftp.gnu.org/gnu/diffutils/">GNU diff</a> & <a href="https://ftp.gnu.org/pub/gnu/libiconv/">GNU LibIconv</a> and put them in PATH.  
-Or simply disable those 2 linters. Use File-Watcher in IDEA.
+Please disable goimports / gofmt linters. Use [File-Watcher](https://tech.flyclops.com/posts/2016-06-14-goimports-intellij.html) in IDEA.  
+*It you insist using those 2 linters, download <a href="http://ftp.gnu.org/gnu/diffutils/">GNU diff</a> & <a href="https://ftp.gnu.org/pub/gnu/libiconv/">GNU LibIconv</a> and put them in system PATH (eg: C:\WINDOWS). Normally it's missing from the system.*
 
 ## Report a bug
 * Please note down your platform (Win/Linux/Mac), IDEA/Goland version, Go version

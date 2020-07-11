@@ -24,8 +24,11 @@
         <projectConfigurable groupId="tools" displayName="Go Linter" id="preference.GoLinterConfigurable" instance="com.ypwang.plugin.form.GoLinterSettings" />
         <postStartupActivity implementation="com.ypwang.plugin.GoLinterSettingsTracker"/>
         <!-- Add your extensions here -->
-        <localInspection displayName="Linter" groupPath="Go" id="GoLinterLocal" language="go"
-                         groupName="Code style issues" enabledByDefault="true" level="WARNING"
+        <localInspection displayName="Golangci-Lint" groupPath="Go" id="GoLinterLocal" language="go"
+                         groupName="General" enabledByDefault="true" level="WARNING"
                          implementationClass="com.ypwang.plugin.GoLinterLocalInspection"/>
+        <globalInspection displayName="Golangci-Lint" groupPath="Go" id="GoLinterGlobal" language="go"
+                          groupName="General" enabledByDefault="true" level="WARNING"
+                          implementationClass="com.ypwang.plugin.GoLinterGlobalInspection"/>
     </extensions>
 </idea-plugin>

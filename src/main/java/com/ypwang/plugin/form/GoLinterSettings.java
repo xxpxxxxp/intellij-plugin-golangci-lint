@@ -14,6 +14,7 @@ import com.intellij.openapi.ui.ComponentValidator;
 import com.intellij.openapi.ui.DialogBuilder;
 import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.openapi.util.Disposer;
+import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -37,8 +38,8 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
-import javax.swing.event.TableModelEvent;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableColumn;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.File;
@@ -56,16 +57,20 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     }
 
     private JPanel settingPanel;
-    private JComboBox<String> linterComboBox;
+    private JComboBox<String> linterChooseComboBox;
     private JButton linterChooseButton;
-    private JButton goGetButton;
+    private JButton fetchLatestReleaseButton;
     private JCheckBox useCustomOptionsCheckBox;
     private HintTextField customOptionsField;
     private JComponent configFileHintLabel;
     private JPanel linterSelectPanel;
-    private JLabel helpLabel;
+    private JLabel helpDocumentLabel;
     private AsyncProcessIcon.Big refreshProcessIcon;
-    private JTable lintersTable;
+    private JTable linterTable;
+
+    private LabelTableHeaderRender linterTableHeader;
+    private List<GoLinter> allLinters;
+    private Set<String> enabledLinters;
 
     private boolean modified = false;
     private HashSet<String> lintersInPath;
@@ -76,55 +81,102 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     public GoLinterSettings(@NotNull Project project) {
         curProject = project;
 
-        linterComboBox.addActionListener(this::linterSelected);
+        linterChooseComboBox.addActionListener(this::linterSelected);
         linterChooseButton.addActionListener(e -> linterChoose());
-        goGetButton.addActionListener(e -> goGet());
+        fetchLatestReleaseButton.addActionListener(e -> goGet());
         useCustomOptionsCheckBox.addActionListener(e -> customOptionsField.setEnabled(buttonActionPerformed(e)));
     }
 
+    @SuppressWarnings("unchecked")
     private void createUIComponents() {
         // initialize components
-        linterComboBox = new ComboBox<>();
-        goGetButton = new JButton();
+        linterChooseComboBox = new ComboBox<>();
+        fetchLatestReleaseButton = new JButton();
         useCustomOptionsCheckBox = new JCheckBox();
         customOptionsField = new HintTextField("Please be careful with parameters supplied...");
-        helpLabel = new LinkLabel<String>(null, null, (aSource, aLinkData) -> {
+        helpDocumentLabel = new LinkLabel<String>(null, null, (aSource, aLinkData) -> {
             try {
-                Desktop.getDesktop().browse(new URL("https://github.com/golangci/golangci-lint#config-file").toURI());
+                Desktop.getDesktop().browse(new URL("https://golangci-lint.run/usage/configuration/#config-file").toURI());
             } catch (Exception e) {
                 // ignore
             }
         });
         linterSelectPanel = new JPanel(new CardLayout());
-        lintersTable = new JBTable();
-        refreshProcessIcon = new AsyncProcessIcon.Big("progress");
-        lintersTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        linterSelectPanel.add("lintersTable", new JBScrollPane(lintersTable));
-        linterSelectPanel.add("refreshProcessIcon", refreshProcessIcon);
 
-        linterComboBox.setRenderer(new FileExistCellRender());
-
-        DefaultTableModel model = new DefaultTableModel(new String[]{"Enabled", "Name", "Description"}, 0) {
+        // linterTable initialization
+        linterTable = new JBTable() {
             @Override
-            public Class<?> getColumnClass(int columnIndex) {
-                if (columnIndex == 0) return Boolean.class;
-                else return String.class;
+            public void setEnabled(boolean enabled) {
+                super.setEnabled(enabled);
+                if (linterTableHeader != null) {
+                    linterTableHeader.setEnabled(enabled);
+                }
             }
+        };
 
+        linterTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
+        linterTable.getTableHeader().setReorderingAllowed(false);
+
+        DefaultTableModel model = new DefaultTableModel(new String[]{"", "Description"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return column == 0;
             }
         };
-        model.addTableModelListener(e -> {
-            // only care about first column switches
-            if (e.getType() == TableModelEvent.UPDATE && e.getColumn() == 0)
-                modified = true;
+        linterTable.setModel(model);
+
+        linterTable.getColumnModel().getColumn(1).setPreferredWidth(400);
+        // customize first column header & render & editor
+        TableColumn tc = linterTable.getColumnModel().getColumn(0);
+
+        CheckBoxCellEditor editor = new CheckBoxCellEditor(e -> {
+            JCheckBox checkBox = (JCheckBox) e.getSource();
+            if (checkBox.isSelected()) {
+                enabledLinters.add(checkBox.getText());
+            } else {
+                enabledLinters.remove(checkBox.getText());
+            }
+            linterTableHeader.switchState(enabledLinters.size() != allLinters.size());
+            modified = true;
         });
-        lintersTable.setModel(model);
-        lintersTable.getColumnModel().getColumn(0).setPreferredWidth(15);
-        lintersTable.getColumnModel().getColumn(1).setPreferredWidth(100);
-        lintersTable.getColumnModel().getColumn(2).setPreferredWidth(400);
+        tc.setCellRenderer(editor);
+        tc.setCellEditor(editor);
+        tc.setPreferredWidth(120);
+
+        linterTableHeader = new LabelTableHeaderRender(linterTable, isEnableAllStatus -> {
+            if (isEnableAllStatus) {
+                // enable all clicked
+                if (allLinters != null) {
+                    enabledLinters = allLinters.stream().map(GoLinter::getName).collect(Collectors.toSet());
+                }
+            } else {
+                // disable all clicked
+                if (enabledLinters != null) {
+                    enabledLinters.clear();
+                }
+            }
+
+            if (linterTable.isEditing()) {
+                linterTable.getCellEditor().cancelCellEditing();
+            }
+
+            // reset linters
+            for (int r = 0; r < linterTable.getRowCount(); r++) {
+                linterTable.setValueAt(Pair.create(
+                        isEnableAllStatus,
+                        ((Pair<Boolean, String>) linterTable.getValueAt(r, 0)).getSecond()
+                ), r, 0);
+            }
+
+            modified = true;
+        });
+        tc.setHeaderRenderer(linterTableHeader);
+
+        refreshProcessIcon = new AsyncProcessIcon.Big("progress");
+        linterSelectPanel.add("lintersTable", new JBScrollPane(linterTable));
+        linterSelectPanel.add("refreshProcessIcon", refreshProcessIcon);
+
+        linterChooseComboBox.setRenderer(new FileExistCellRender());
 
         // Components initialization
         new ComponentValidator(curProject).withValidator(() -> {
@@ -161,19 +213,36 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                     // ignore
                 }
             });
-            lintersTable.setEnabled(false);
+            linterTable.setEnabled(false);
         } else {
             JCheckBox tmp = new JCheckBox("I'm using custom config file");
             tmp.setForeground(new JBColor(0xffc107, 0xffc107));
-            tmp.addActionListener(e -> lintersTable.setEnabled(!buttonActionPerformed(e)));
+            tmp.addActionListener(e -> linterTable.setEnabled(!buttonActionPerformed(e)));
             tmp.setSelected(GoLinterConfig.INSTANCE.getUseConfigFile());
             configFileHintLabel = tmp;
         }
     }
 
+    // refresh lintersTable with selected item of linterComboBox
+    private void refreshTableContent() {
+        DefaultTableModel model = (DefaultTableModel) linterTable.getModel();
+        model.setRowCount(0);
+
+        if (allLinters != null) {
+            for (GoLinter linter : allLinters) {
+                model.addRow(new Object[]{
+                        new Pair<>(enabledLinters.contains(linter.getName()), linter.getName()),
+                        linter.getDescription()
+                });
+            }
+        }
+    }
+
+    // if `selected` not in combo list, add it into combo list
+    // set combo box to `selected`
     @SuppressWarnings("unchecked")
     private void setLinterExecutables(@NotNull String selected) {
-        HashSet<String> items;
+        Set<String> items;
 
         if (!lintersInPath.contains(selected)) {
             items = (HashSet<String>) lintersInPath.clone();
@@ -181,49 +250,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         } else items = lintersInPath;
 
         DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>(items.toArray(new String[0]));
-        linterComboBox.setModel(model);
-        linterComboBox.setSelectedItem(selected);
-    }
-
-    // refresh {@link lintersTable} with selected item of {@link linterComboBox}
-    private void refreshLinterTable() {
-        CardLayout cl = (CardLayout) linterSelectPanel.getLayout();
-        refreshProcessIcon.resume();
-        cl.show(linterSelectPanel, "refreshProcessIcon");
-
-        ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            if (linterComboBox.getSelectedItem() != null) {
-                DefaultTableModel model = (DefaultTableModel) lintersTable.getModel();
-                model.setRowCount(0);
-
-                String selected = (String) linterComboBox.getSelectedItem();
-                if (new File(selected).canExecute()) {
-                    List<GoLinter> allLinters = GolangCiOutputParser.INSTANCE.parseLinters(
-                            GolangCiOutputParser.INSTANCE.runProcess(Arrays.asList(selected, "linters"), curProject.getBasePath(), new HashMap<>())
-                    );
-
-                    Set<String> enabledLinters;
-                    String[] enabledLintersInConfig = GoLinterConfig.INSTANCE.getEnabledLinters();
-                    if (enabledLintersInConfig != null && configFile.isEmpty())
-                        // previously selected linters
-                        enabledLinters = Arrays.stream(enabledLintersInConfig).collect(Collectors.toSet());
-                    else
-                        // default enabled linters
-                        enabledLinters = allLinters.stream().filter(GoLinter::getDefaultEnabled).map(GoLinter::getName).collect(Collectors.toSet());
-
-                    for (GoLinter linter : allLinters) {
-                        model.addRow(new Object[]{
-                                enabledLinters.contains(linter.getName()),
-                                linter.getFullName(),
-                                linter.getDescription()
-                        });
-                    }
-                }
-            }
-
-            cl.show(linterSelectPanel, "lintersTable");
-            refreshProcessIcon.suspend();
-        });
+        linterChooseComboBox.setModel(model);
+        linterChooseComboBox.setSelectedItem(selected);
     }
 
     // return path of golangci-lint in PATH
@@ -266,24 +294,13 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     @Override
     public void apply() {
-        if (linterComboBox.getSelectedItem() != null) {
-            GoLinterConfig.INSTANCE.setGoLinterExe((String) linterComboBox.getSelectedItem());
+        if (linterChooseComboBox.getSelectedItem() != null) {
+            GoLinterConfig.INSTANCE.setGoLinterExe((String) linterChooseComboBox.getSelectedItem());
         }
         GoLinterConfig.INSTANCE.setUseCustomOptions(useCustomOptionsCheckBox.isSelected());
         GoLinterConfig.INSTANCE.setCustomOptions(customOptionsField.getText());
         if (configFileHintLabel instanceof JCheckBox) {
             GoLinterConfig.INSTANCE.setUseConfigFile(((JCheckBox)configFileHintLabel).isSelected());
-        }
-
-        LinkedList<String> enabledLinters = new LinkedList<>();
-        for (int row = 0; row < lintersTable.getRowCount(); row++) {
-            if ((boolean) lintersTable.getValueAt(row, 0)) {
-                String linter = (String) lintersTable.getValueAt(row, 1);
-                int idx = linter.indexOf(' ');
-                if (idx > 0)
-                    linter = linter.substring(0, idx);
-                enabledLinters.add(linter);
-            }
         }
 
         GoLinterConfig.INSTANCE.setEnabledLinters(enabledLinters.toArray(new String[0]));
@@ -305,15 +322,15 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     @Override
     public void reset() {
         linterPathSelected = GoLinterConfig.INSTANCE.getGoLinterExe();
-        if (!linterPathSelected.equals(linterComboBox.getSelectedItem()))
+        if (!linterPathSelected.equals(linterChooseComboBox.getSelectedItem()))
             setLinterExecutables(linterPathSelected);
 
         // force refresh to get rid of enabled / disabled linters change
-        refreshLinterTable();
+        refreshTableContent();
 
         if (configFileHintLabel instanceof JCheckBox) {
             ((JCheckBox)configFileHintLabel).setSelected(GoLinterConfig.INSTANCE.getUseConfigFile());
-            lintersTable.setEnabled(!GoLinterConfig.INSTANCE.getUseConfigFile());
+            linterTable.setEnabled(!GoLinterConfig.INSTANCE.getUseConfigFile());
         }
 
         customOptionsField.setText(GoLinterConfig.INSTANCE.getCustomOptions());
@@ -330,34 +347,63 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     @Override
     public void dispose() {
-        UIUtil.dispose(this.linterComboBox);
-        UIUtil.dispose(this.goGetButton);
+        UIUtil.dispose(this.linterChooseComboBox);
+        UIUtil.dispose(this.fetchLatestReleaseButton);
         UIUtil.dispose(this.useCustomOptionsCheckBox);
         UIUtil.dispose(this.customOptionsField);
         UIUtil.dispose(this.configFileHintLabel);
-        UIUtil.dispose(this.helpLabel);
+        UIUtil.dispose(this.helpDocumentLabel);
         UIUtil.dispose(this.linterSelectPanel);
         UIUtil.dispose(this.refreshProcessIcon);
-        UIUtil.dispose(this.lintersTable);
-        this.linterComboBox = null;
-        this.goGetButton = null;
+        UIUtil.dispose(this.linterTable);
+        this.linterChooseComboBox = null;
+        this.fetchLatestReleaseButton = null;
         this.useCustomOptionsCheckBox = null;
         this.customOptionsField = null;
         this.configFileHintLabel = null;
-        this.helpLabel = null;
+        this.helpDocumentLabel = null;
         this.linterSelectPanel = null;
         this.refreshProcessIcon = null;
-        this.lintersTable = null;
+        this.linterTable = null;
     }
 
     //----------------------------- ActionListeners -----------------------------
     private void linterSelected(ActionEvent e) {
-        if (!Objects.equals(linterComboBox.getSelectedItem(), linterPathSelected)) {
-            // selection changed
-            modified = true;
-            linterPathSelected = (String)linterComboBox.getSelectedItem();
-            refreshLinterTable();
-        }
+        // selection changed
+        modified = true;
+        linterPathSelected = (String) linterChooseComboBox.getSelectedItem();
+
+        // refresh linters
+        CardLayout cl = (CardLayout) linterSelectPanel.getLayout();
+        refreshProcessIcon.resume();
+        cl.show(linterSelectPanel, "refreshProcessIcon");
+
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            allLinters = null;
+            enabledLinters = null;
+
+            if (new File(linterPathSelected).canExecute()) {
+                allLinters = GolangCiOutputParser.INSTANCE.parseLinters(
+                        GolangCiOutputParser.INSTANCE.runProcess(Arrays.asList(linterPathSelected, "linters"), curProject.getBasePath(), new HashMap<>())
+                );
+
+                String[] enabledLintersInConfig = GoLinterConfig.INSTANCE.getEnabledLinters();
+                if (enabledLintersInConfig != null && configFile.isEmpty()) {
+                    // previously selected linters
+                    enabledLinters = Arrays.stream(enabledLintersInConfig).collect(Collectors.toSet());
+                } else {
+                    // default enabled linters
+                    enabledLinters = allLinters.stream().filter(GoLinter::getDefaultEnabled).map(GoLinter::getName).collect(Collectors.toSet());
+                }
+            }
+
+            linterTableHeader.switchState(allLinters == null || enabledLinters.size() != allLinters.size());
+
+            cl.show(linterSelectPanel, "lintersTable");
+            refreshProcessIcon.suspend();
+
+            refreshTableContent();
+        });
     }
 
     private void linterChoose() {
@@ -368,8 +414,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         }
 
         VirtualFile curSelected = null;
-        if (linterComboBox.getSelectedItem() != null) {
-            curSelected = LocalFileSystem.getInstance().findFileByPath((String) linterComboBox.getSelectedItem());
+        if (linterChooseComboBox.getSelectedItem() != null) {
+            curSelected = LocalFileSystem.getInstance().findFileByPath((String) linterChooseComboBox.getSelectedItem());
         }
 
         VirtualFile file = FileChooser.chooseFile(
@@ -379,27 +425,13 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                 curSelected);
 
         if (file != null) {
-            // because `file.getPath()` returns linux path, seems wired on windows
+            // because `file.getPath()` returns linux path, seems weird on windows
             String systemPath = Paths.get(file.getPath()).toString();
             if (curSelected == null || !systemPath.equals(curSelected.getPath()))
                 modified = true;
 
             setLinterExecutables(systemPath);
         }
-    }
-
-    private void showDialog(String title, String message) {
-        JLabel messageLabel = new JBLabel(message,
-                new ImageIcon(new ImageIcon(this.getClass().getResource("/images/mole.png")).getImage().getScaledInstance(60, 60, Image.SCALE_SMOOTH)),
-                SwingConstants.CENTER);
-        messageLabel.setBorder(JBUI.Borders.empty(10));
-        messageLabel.setIconTextGap(20);
-        DialogBuilder builder = new DialogBuilder(settingPanel).title(title).centerPanel(messageLabel).resizable(false);
-        builder.removeAllActions();
-        builder.addOkAction();
-        builder.show();
-        builder.dispose();
-        UIUtil.dispose(messageLabel);
     }
 
     private void goGet() {
@@ -421,7 +453,17 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         } catch (ProcessCanceledException ex) {
             UtilitiesKt.getLogger().info("get latest golangci-lint cancelled");
         } catch (Exception ex) {
-            showDialog("Failed to get latest release", ex.getMessage());
+            JLabel messageLabel = new JBLabel(ex.getMessage(),
+                    new ImageIcon(new ImageIcon(this.getClass().getResource("/images/mole.png")).getImage().getScaledInstance(60, 60, Image.SCALE_SMOOTH)),
+                    SwingConstants.CENTER);
+            messageLabel.setBorder(JBUI.Borders.empty(10));
+            messageLabel.setIconTextGap(20);
+            DialogBuilder builder = new DialogBuilder(settingPanel).title("Failed to get latest release").centerPanel(messageLabel).resizable(false);
+            builder.removeAllActions();
+            builder.addOkAction();
+            builder.show();
+            builder.dispose();
+            UIUtil.dispose(messageLabel);
         }
     }
 

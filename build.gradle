@@ -44,9 +44,9 @@ dependencies {
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-    version '2020.1.1'
+    version '202-EAP-SNAPSHOT'
     type 'IU'
-    plugins 'org.jetbrains.plugins.go:201.7223.82.165'
+    plugins 'org.jetbrains.plugins.go:202.6250.13'
     intellij.updateSinceUntilBuild false
 }
 

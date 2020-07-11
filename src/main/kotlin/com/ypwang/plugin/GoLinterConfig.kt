@@ -34,7 +34,7 @@ object GoLinterConfig {
         get() = properties.getBoolean(GO_USE_CONFIG_FILE, false)
         set(value) = properties.setValue(GO_USE_CONFIG_FILE, value)
 
-    var checkGoLinterExe
+    var checkGoLinterExe: Boolean
         get() = properties.getBoolean(CHECK_GO_LINTER_EXE, true)
         set(value) = properties.setValue(CHECK_GO_LINTER_EXE, value)
 }

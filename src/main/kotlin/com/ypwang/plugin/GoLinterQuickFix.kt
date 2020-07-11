@@ -99,6 +99,17 @@ object GoPrintfFuncNameHandler : ProblemHandler() {
             }
 }
 
+object ExhaustiveHandler : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+            chainFindAndHandle(file, document, issue, overrideLine) { element: GoExprSwitchStatement ->
+                (if (element.exprCaseClauseList.last().default == null)
+                    arrayOf<LocalQuickFix>(GoSwitchAddCaseFix(issue.Text.substring(issue.Text.indexOf(':')+2), element))
+                else
+                    // last case is default, no need to add more cases
+                    EmptyLocalQuickFix) to element.condition?.textRange
+            }
+}
+
 // direct to explanation
 object ScopelintHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
@@ -108,6 +119,21 @@ object ScopelintHandler : ProblemHandler() {
 object GoErr113Handler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/goerr113.md")) to null
+}
+
+object GoFumptHandler : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+            arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/gofumpt.md")) to null
+}
+
+object ExportLoopRefHandler : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+            arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/exportloopref.md")) to null
+}
+
+object NoCtxRefHandler : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+            arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/sonatard/noctx/blob/master/README.md")) to null
 }
 
 // just fit range
@@ -168,7 +194,11 @@ val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "gomnd" to GoMndHandler,
         "staticcheck" to StaticCheckHandler,
         "goprintffuncname" to GoPrintfFuncNameHandler,
-        "gosimple" to GoSimpleHandler
+//        "exhaustive" to ExhaustiveHandler,    // exhaustive is error prone
+        "gosimple" to GoSimpleHandler,
+        "gofumpt" to GoFumptHandler,
+        "exportloopref" to ExportLoopRefHandler,
+        "noctx" to NoCtxRefHandler
     ).apply {
         this.putAll(listOf("structcheck", "varcheck", "deadcode", "unused").map { it to NamedElementHandler })
         this.putAll(ProblemHandler.FuncLinters.map { it to funcNoLintHandler(it) })

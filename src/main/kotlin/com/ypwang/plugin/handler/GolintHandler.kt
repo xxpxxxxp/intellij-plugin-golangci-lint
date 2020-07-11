@@ -1,9 +1,6 @@
 package com.ypwang.plugin.handler
 
-import com.goide.psi.GoElseStatement
-import com.goide.psi.GoFunctionOrMethodDeclaration
-import com.goide.psi.GoMethodDeclaration
-import com.goide.psi.GoNamedElement
+import com.goide.psi.*
 import com.goide.quickfix.GoRenameToQuickFix
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.openapi.editor.Document
@@ -11,6 +8,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.quickfix.GoOutdentElseFix
+import com.ypwang.plugin.quickfix.GoRenamePackageFix
 import com.ypwang.plugin.quickfix.GoReorderFuncReturnFix
 
 object GolintHandler : ProblemHandler() {
@@ -41,6 +39,10 @@ object GolintHandler : ProblemHandler() {
                 issue.Text == "error should be the last type when returning multiple items" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionOrMethodDeclaration ->
                         arrayOf<LocalQuickFix>(GoReorderFuncReturnFix(element)) to element.signature!!.result!!.textRange
+                    }
+                issue.Text.startsWith("don't use MixedCaps in package name") ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoPackageClause ->
+                        arrayOf<LocalQuickFix>(GoRenamePackageFix(element, element.identifier!!.text.toLowerCase())) to element.identifier!!.textRange
                     }
                 issue.Text.startsWith("var ") || issue.Text.startsWith("const ") || issue.Text.startsWith("type ") || issue.Text.startsWith("struct field ") -> {
                     var begin = issue.Text.indexOf('`')
