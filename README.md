@@ -23,7 +23,7 @@ Then select linters you need:
 
 ![](explanation/settled.png)
 
-If you are have your own golangci-lint config file, in most case the plugin will detect and use it. If it didn't, choose `I'm using custom config file` checkbox.  
+If you have your own golangci-lint config file, in most case the plugin will detect and use it. If it didn't, choose `I'm using custom config file` checkbox.  
 Click `OK`, you are all set!
 
 Please keep in mind that **golangci-lint** is a linter tool, **it only works if your project could build**, or it will report no issue.

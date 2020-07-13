@@ -102,11 +102,15 @@ object GoPrintfFuncNameHandler : ProblemHandler() {
 object ExhaustiveHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             chainFindAndHandle(file, document, issue, overrideLine) { element: GoExprSwitchStatement ->
-                (if (element.exprCaseClauseList.last().default == null)
-                    arrayOf<LocalQuickFix>(GoSwitchAddCaseFix(issue.Text.substring(issue.Text.indexOf(':')+2), element))
-                else
-                    // last case is default, no need to add more cases
-                    EmptyLocalQuickFix) to element.condition?.textRange
+                val fix = run {
+                    if (element.exprCaseClauseList.last().default == null)
+                        arrayOf<LocalQuickFix>(GoSwitchAddCaseFix(issue.Text.substring(issue.Text.indexOf(':')+2), element))
+                    else
+                        // last case is default, no need to add more cases
+                        EmptyLocalQuickFix
+                }
+
+                fix to element.condition?.textRange
             }
 }
 

@@ -15,6 +15,14 @@ import com.ypwang.plugin.quickfix.*
 object GoSimpleHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             when (issue.Text.substring(0, issue.Text.indexOf(':'))) {
+                // should omit comparison to bool constant, can be simplified to `...`
+                "S1002" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoConditionalExpr ->
+                        val begin = issue.Text.indexOf('`')
+                        val end = issue.Text.indexOf('`', begin + 1)
+                        val replace = issue.Text.substring(begin + 1, end)
+                        arrayOf<LocalQuickFix>(GoReplaceExpressionFix(replace, element)) to element.textRange
+                    }
                 // should use !strings.Contains(domain, \".\") instead
                 // should use !bytes.Equal(meta.CRC, computed) instead
                 "S1003", "S1004" ->

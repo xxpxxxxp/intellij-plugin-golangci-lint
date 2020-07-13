@@ -1,8 +1,10 @@
 package com.ypwang.plugin.handler
 
 import com.goide.psi.GoLiteral
+import com.goide.psi.GoParamDefinition
 import com.goide.psi.GoReferenceExpression
 import com.goide.psi.GoStatement
+import com.goide.quickfix.GoRenameToBlankQuickFix
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
@@ -26,22 +28,19 @@ object StaticCheckHandler : ProblemHandler() {
                             arrayOf<LocalQuickFix>(GoReferenceRenameToBlankQuickFix(element)) to element.identifier.textRange
                         else NonAvailableFix
                     }
+                // argument xxx is overwritten before first use
+                "SA4009" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoParamDefinition ->
+                        arrayOf<LocalQuickFix>(GoRenameToBlankQuickFix(element)) to element.identifier.textRange
+                    }
                 // file mode '777' evaluates to 01411; did you mean '0777'?"
-                "SA9002" -> {
-                    var begin = issue.Text.indexOf('\'')
-                    var end = issue.Text.indexOf('\'', begin + 1)
-                    val currentAssignment = issue.Text.substring(begin + 1, end)
-
-                    begin = issue.Text.indexOf('\'', end + 1)
-                    end = issue.Text.indexOf('\'', begin + 1)
-                    val replace = issue.Text.substring(begin + 1, end)
-
+                "SA9002" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoLiteral ->
+                        val (currentAssignment, replace) = extractQuote(issue.Text, 2)
                         if (element.int?.text == currentAssignment)
                             arrayOf<LocalQuickFix>(GoReplaceElementFix(replace, element, GoLiteral::class.java)) to element.textRange
                         else NonAvailableFix
                     }
-                }
                 // empty branch
                 "SA9003" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoStatement ->

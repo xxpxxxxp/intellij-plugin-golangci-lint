@@ -1,12 +1,14 @@
 package com.ypwang.plugin.handler
 
-import com.goide.psi.*
+import com.goide.psi.GoCallExpr
+import com.goide.psi.GoConditionalExpr
+import com.goide.psi.GoLiteral
+import com.goide.psi.GoStringLiteral
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.ypwang.plugin.model.LintIssue
-import com.ypwang.plugin.quickfix.GoReferenceRenameToBlankQuickFix
 import com.ypwang.plugin.quickfix.GoReplaceStringFix
 import com.ypwang.plugin.quickfix.GoSwapBinaryExprFix
 import org.apache.commons.lang.StringEscapeUtils
@@ -46,17 +48,6 @@ object StyleCheckHandler : ProblemHandler() {
                             }
                             "\"$sb\""
                         }) to element.textRange
-                    }
-                // this value of `xxx` is never used
-                "SA4006" ->
-                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoReferenceExpression ->
-                        // get the variable
-                        val begin = issue.Text.indexOf('`')
-                        val end = issue.Text.indexOf('`', begin + 1)
-                        val variable = issue.Text.substring(begin + 1, end)
-                        if (element.text == variable)
-                            arrayOf<LocalQuickFix>(GoReferenceRenameToBlankQuickFix(element)) to element.identifier.textRange
-                        else NonAvailableFix
                     }
                 else -> NonAvailableFix
             }

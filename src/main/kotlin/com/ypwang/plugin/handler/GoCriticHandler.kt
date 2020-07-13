@@ -7,24 +7,14 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.ypwang.plugin.model.LintIssue
-import com.ypwang.plugin.quickfix.GoDerefFix
-import com.ypwang.plugin.quickfix.GoOutdentInnerIfFix
-import com.ypwang.plugin.quickfix.GoReplaceElementFix
-import com.ypwang.plugin.quickfix.GoReplaceExpressionFix
+import com.ypwang.plugin.quickfix.*
 
 object GoCriticHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             when {
-                issue.Text.startsWith("assignOp: replace") -> {
-                    var begin = issue.Text.indexOf('`')
-                    var end = issue.Text.indexOf('`', begin + 1)
-                    val currentAssignment = issue.Text.substring(begin + 1, end)
-
-                    begin = issue.Text.indexOf('`', end + 1)
-                    end = issue.Text.indexOf('`', begin + 1)
-                    val replace = issue.Text.substring(begin + 1, end)
-
+                issue.Text.startsWith("assignOp: replace") ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoAssignmentStatement ->
+                        val (currentAssignment, replace) = extractQuote(issue.Text, 2)
                         if (element.text == currentAssignment) {
                             if (replace.endsWith("++") || replace.endsWith("--"))
                                 arrayOf<LocalQuickFix>(GoReplaceElementFix(replace, element, GoIncDecStatement::class.java)) to element.textRange
@@ -32,7 +22,6 @@ object GoCriticHandler : ProblemHandler() {
                                 arrayOf<LocalQuickFix>(GoReplaceElementFix(replace, element, GoAssignmentStatement::class.java)) to element.textRange
                         } else NonAvailableFix
                     }
-                }
                 issue.Text.startsWith("sloppyLen:") ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoConditionalExpr ->
                         if (issue.Text.contains(element.text)) {
@@ -67,12 +56,13 @@ object GoCriticHandler : ProblemHandler() {
                         else NonAvailableFix
                     }
                 }
-//                issue.Text == "singleCaseSwitch: should rewrite switch statement to if statement" ->
-//                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoSwitchStatement ->
-//                        // cannot handle typed-switch statement because that introduce new variable
-//                        (if (element is GoExprSwitchStatement) arrayOf<LocalQuickFix>(GoSingleCaseSwitchFix(element))
-//                        else emptyLocalQuickFix) to element.textRange
-//                    }
+                issue.Text == "singleCaseSwitch: should rewrite switch statement to if statement" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoSwitchStatement ->
+                        // cannot handle type switch with var assign
+                        val fix = if (element is GoTypeSwitchStatement && element.statement != null) EmptyLocalQuickFix
+                                  else arrayOf<LocalQuickFix>(GoSingleCaseSwitchFix(element))
+                        fix to element.switchStart?.textRange
+                    }
                 else -> NonAvailableFix
             }
 }

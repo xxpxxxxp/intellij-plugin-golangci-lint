@@ -20,8 +20,10 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
     private fun noExecutableNotification(project: Project) {
         notificationGroup.createNotification(
                 "Configure golangci-lint",
-                "golangci-lint executable is needed for linter inspection work",
-                NotificationType.INFORMATION).apply {
+                "golangci-lint executable is needed for linter inspection work. <a href=\"https://github.com/xxpxxxxp/intellij-plugin-golangci-lint\">Checkout guide</a>",
+                NotificationType.INFORMATION,
+                NotificationListener.URL_OPENING_LISTENER
+        ).apply {
             this.addAction(NotificationAction.createSimple("Configure") {
                 ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
                 this.expire()
