@@ -2,6 +2,7 @@ package com.ypwang.plugin.form;
 
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.openapi.options.SearchableConfigurable;
@@ -397,12 +398,14 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                 }
             }
 
-            linterTableHeader.switchState(allLinters == null || enabledLinters.size() != allLinters.size());
+            ApplicationManager.getApplication().invokeLater(() -> {
+                linterTableHeader.switchState(allLinters == null || enabledLinters.size() != allLinters.size());
 
-            cl.show(linterSelectPanel, "lintersTable");
-            refreshProcessIcon.suspend();
+                cl.show(linterSelectPanel, "lintersTable");
+                refreshProcessIcon.suspend();
 
-            refreshTableContent();
+                refreshTableContent();
+            }, ModalityState.any());
         });
     }
 

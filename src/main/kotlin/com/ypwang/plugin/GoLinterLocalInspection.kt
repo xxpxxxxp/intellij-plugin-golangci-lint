@@ -70,10 +70,9 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
             if (!fileEditorManager.isFileOpen(virtualFile)) return true     // no editor opened, so data should be saved
 
             var saved = true
-            val application = ApplicationManager.getApplication()
             val done = AtomicBoolean(false)       // here we use atomic variable as a spinlock
 
-            application.invokeLater {
+            ApplicationManager.getApplication().invokeLater {
                 // ideally there should be 1 editor, unless in split view
                 for (editor in fileEditorManager.getEditors(virtualFile)) {
                     if (editor.isModified) {

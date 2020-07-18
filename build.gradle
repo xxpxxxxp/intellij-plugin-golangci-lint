@@ -46,7 +46,7 @@ dependencies {
 intellij {
     version '202-EAP-SNAPSHOT'
     type 'IU'
-    plugins 'org.jetbrains.plugins.go:202.6250.13'
+    plugins 'org.jetbrains.plugins.go:202.6397.20'
     intellij.updateSinceUntilBuild false
 }
 

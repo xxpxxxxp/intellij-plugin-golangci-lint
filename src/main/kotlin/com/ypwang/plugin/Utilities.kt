@@ -181,7 +181,7 @@ private fun untarball(file: String, to: String, setFraction: (Double) -> Unit, c
 // nio should be more efficient, but let's show some progress to make programmer happy
 private fun copy(input: InputStream, to: String, totalSize: Long, setFraction: (Double) -> Unit, cancelled: () -> Boolean) {
     FileOutputStream(to).use { fos ->
-        var sum = 0
+        var sum = 0.0
         var len: Int
         val data = ByteArray(20 * 1024)
 
@@ -192,7 +192,7 @@ private fun copy(input: InputStream, to: String, totalSize: Long, setFraction: (
             if (len == -1) break
             fos.write(data, 0, len)
             sum += len
-            setFraction(minOf(sum.toDouble() / totalSize, 1.0))
+            setFraction(minOf(sum / totalSize, 1.0))
         }
     }
 }
