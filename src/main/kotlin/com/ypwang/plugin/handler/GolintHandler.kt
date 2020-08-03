@@ -14,7 +14,7 @@ object GolintHandler : ProblemHandler() {
             when {
                 issue.Text == "`if` block ends with a `return` statement, so drop this `else` and outdent its block" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoElseStatement ->
-                        arrayOf<LocalQuickFix>(GoOutdentElseFix(element)) to element.textRange
+                        arrayOf<LocalQuickFix>(GoOutdentElseFix(element)) to element.`else`.textRange
                     }
                 issue.Text == "error should be the last type when returning multiple items" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionOrMethodDeclaration ->

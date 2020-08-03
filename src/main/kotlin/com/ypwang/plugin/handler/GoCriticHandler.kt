@@ -52,7 +52,7 @@ object GoCriticHandler : ProblemHandler() {
                 issue.Text == "elseif: can replace 'else {if cond {}}' with 'else if cond {}'" -> {
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoElseStatement ->
                         if (element.block?.statementList?.size == 1)
-                            arrayOf<LocalQuickFix>(GoOutdentInnerIfFix(element)) to element.textRange
+                            arrayOf<LocalQuickFix>(GoOutdentInnerIfFix(element)) to element.`else`.textRange
                         else NonAvailableFix
                     }
                 }
@@ -62,6 +62,10 @@ object GoCriticHandler : ProblemHandler() {
                         val fix = if (element is GoTypeSwitchStatement && element.statement != null) EmptyLocalQuickFix
                                   else arrayOf<LocalQuickFix>(GoSingleCaseSwitchFix(element))
                         fix to element.switchStart?.textRange
+                    }
+                issue.Text == "ifElseChain: rewrite if-else to switch statement" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoIfStatement ->
+                        arrayOf<LocalQuickFix>(GoIfToSwitchFix(element)) to element.`if`.textRange
                     }
                 else -> NonAvailableFix
             }

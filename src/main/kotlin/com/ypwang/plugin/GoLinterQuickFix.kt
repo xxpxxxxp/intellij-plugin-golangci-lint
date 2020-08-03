@@ -1,13 +1,17 @@
 package com.ypwang.plugin
 
 import com.goide.psi.*
+import com.goide.psi.impl.GoElementFactory
 import com.goide.psi.impl.GoLiteralImpl
 import com.goide.quickfix.GoRenameToQuickFix
 import com.intellij.codeInspection.LocalQuickFix
+import com.intellij.codeInspection.LocalQuickFixOnPsiElement
 import com.intellij.openapi.editor.Document
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiWhiteSpace
 import com.intellij.psi.impl.source.tree.PsiCommentImpl
 import com.intellij.psi.impl.source.tree.PsiWhiteSpaceImpl
 import com.ypwang.plugin.handler.*
@@ -114,6 +118,21 @@ object ExhaustiveHandler : ProblemHandler() {
             }
 }
 
+object NlReturnHandler : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> {
+        val element = file.findElementAt(document.getLineStartOffset(overrideLine))
+        return if (element is PsiWhiteSpace) {
+            arrayOf<LocalQuickFix>(object: LocalQuickFixOnPsiElement(element){
+                override fun getFamilyName(): String = text
+                override fun getText(): String = "Insert new line before"
+                override fun invoke(project: Project, file: PsiFile, startElement: PsiElement, endElement: PsiElement) {
+                    startElement.parent.addBefore(GoElementFactory.createNewLine(project, 2), startElement)
+                }
+            }) to file.findElementAt(calcPos(document, issue, overrideLine))?.textRange
+        } else NonAvailableFix
+    }
+}
+
 // direct to explanation
 object ScopelintHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
@@ -202,7 +221,8 @@ val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "gosimple" to GoSimpleHandler,
         "gofumpt" to GoFumptHandler,
         "exportloopref" to ExportLoopRefHandler,
-        "noctx" to NoCtxRefHandler
+        "noctx" to NoCtxRefHandler,
+        "nlreturn" to NlReturnHandler
     ).apply {
         this.putAll(listOf("structcheck", "varcheck", "deadcode", "unused").map { it to NamedElementHandler })
         this.putAll(ProblemHandler.FuncLinters.map { it to funcNoLintHandler(it) })

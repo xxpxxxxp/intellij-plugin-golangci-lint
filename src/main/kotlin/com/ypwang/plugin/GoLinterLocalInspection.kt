@@ -381,7 +381,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
                         processResult.stderr.contains("error computing diff") ->
                             notificationGroup.createNotification(
                                     ErrorTitle,
-                                    "diff is needed for running gofmt/goimports. Either put <a href=\"http://ftp.gnu.org/gnu/diffutils/\">GNU diff</a> & <a href=\"https://ftp.gnu.org/pub/gnu/libiconv/\">GNU LibIconv</a> binary in PATH, or disable gofmt/goimports.",
+                                    "diff is needed for running gofmt/goimports/gci. Either put <a href=\"http://ftp.gnu.org/gnu/diffutils/\">GNU diff</a> & <a href=\"https://ftp.gnu.org/pub/gnu/libiconv/\">GNU LibIconv</a> binary in PATH, or disable gofmt/goimports.",
                                     NotificationType.ERROR,
                                     NotificationListener.URL_OPENING_LISTENER).apply {
                                 this.addAction(NotificationAction.createSimple("Configure") {
