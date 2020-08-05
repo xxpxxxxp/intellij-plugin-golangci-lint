@@ -20,7 +20,6 @@ import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.DocumentAdapter;
-import com.intellij.ui.JBColor;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.labels.LinkLabel;
@@ -50,8 +49,13 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class GoLinterSettings implements SearchableConfigurable, Disposable {
+    private static final Set<String> suggestLinters = Stream.of(
+            "gosimple", "govet", "ineffassign", "staticcheck", "bodyclose", "dupl", "exportloopref", "funlen", "gocognit", "goconst",
+            "gocritic", "gocyclo", "goprintffuncname", "gosec", "interfacer", "maligned", "prealloc", "stylecheck", "uncovert", "whitespace"
+    ).collect(Collectors.toSet());
     private static long lastSavedTime = Long.MIN_VALUE;
     public static long getLastSavedTime() {
         return lastSavedTime;
@@ -63,7 +67,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private JButton fetchLatestReleaseButton;
     private JCheckBox useCustomOptionsCheckBox;
     private HintTextField customOptionsField;
-    private JComponent configFileHintLabel;
+    private JComponent multiLabel;
     private JPanel linterSelectPanel;
     private JLabel helpDocumentLabel;
     private AsyncProcessIcon.Big refreshProcessIcon;
@@ -206,7 +210,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         configFile = GoLinterLocalInspection.Companion.findCustomConfigInPath(curProject.getBasePath());
         if (!configFile.isEmpty()) {
             // found an valid config file
-            configFileHintLabel = new LinkLabel<String>(
+            multiLabel = new LinkLabel<String>(
                     String.format("Using %s", configFile), null, (aSource, aLinkData) -> {
                 try {
                     Desktop.getDesktop().open(new File(configFile));
@@ -216,11 +220,10 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
             });
             linterTable.setEnabled(false);
         } else {
-            JCheckBox tmp = new JCheckBox("I'm using custom config file");
-            tmp.setForeground(new JBColor(0xffc107, 0xffc107));
-            tmp.addActionListener(e -> linterTable.setEnabled(!buttonActionPerformed(e)));
-            tmp.setSelected(GoLinterConfig.INSTANCE.getUseConfigFile());
-            configFileHintLabel = tmp;
+            JButton tmp = new JButton("Suggest me!");
+            tmp.setEnabled(false);
+            tmp.addActionListener(this::suggestLinters);
+            multiLabel = tmp;
         }
     }
 
@@ -300,9 +303,6 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         }
         GoLinterConfig.INSTANCE.setUseCustomOptions(useCustomOptionsCheckBox.isSelected());
         GoLinterConfig.INSTANCE.setCustomOptions(customOptionsField.getText());
-        if (configFileHintLabel instanceof JCheckBox) {
-            GoLinterConfig.INSTANCE.setUseConfigFile(((JCheckBox)configFileHintLabel).isSelected());
-        }
 
         GoLinterConfig.INSTANCE.setEnabledLinters(enabledLinters.toArray(new String[0]));
         lastSavedTime = System.currentTimeMillis();
@@ -329,11 +329,6 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         // force refresh to get rid of enabled / disabled linters change
         refreshTableContent();
 
-        if (configFileHintLabel instanceof JCheckBox) {
-            ((JCheckBox)configFileHintLabel).setSelected(GoLinterConfig.INSTANCE.getUseConfigFile());
-            linterTable.setEnabled(!GoLinterConfig.INSTANCE.getUseConfigFile());
-        }
-
         customOptionsField.setText(GoLinterConfig.INSTANCE.getCustomOptions());
         useCustomOptionsCheckBox.setSelected(GoLinterConfig.INSTANCE.getUseCustomOptions());
         customOptionsField.setEnabled(GoLinterConfig.INSTANCE.getUseCustomOptions());
@@ -352,7 +347,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         UIUtil.dispose(this.fetchLatestReleaseButton);
         UIUtil.dispose(this.useCustomOptionsCheckBox);
         UIUtil.dispose(this.customOptionsField);
-        UIUtil.dispose(this.configFileHintLabel);
+        UIUtil.dispose(this.multiLabel);
         UIUtil.dispose(this.helpDocumentLabel);
         UIUtil.dispose(this.linterSelectPanel);
         UIUtil.dispose(this.refreshProcessIcon);
@@ -361,7 +356,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         this.fetchLatestReleaseButton = null;
         this.useCustomOptionsCheckBox = null;
         this.customOptionsField = null;
-        this.configFileHintLabel = null;
+        this.multiLabel = null;
         this.helpDocumentLabel = null;
         this.linterSelectPanel = null;
         this.refreshProcessIcon = null;
@@ -396,6 +391,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                     // default enabled linters
                     enabledLinters = allLinters.stream().filter(GoLinter::getDefaultEnabled).map(GoLinter::getName).collect(Collectors.toSet());
                 }
+
+                multiLabel.setEnabled(true);
             }
 
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -451,7 +448,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                             return Unit.INSTANCE;
                         },
                         progressIndicator::isCanceled);
-            }, "Get Latest Release", true, curProject));
+            }, "Get latest release", true, curProject));
             modified = true;
         } catch (ProcessCanceledException ex) {
             UtilitiesKt.getLogger().info("get latest golangci-lint cancelled");
@@ -461,7 +458,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                     SwingConstants.CENTER);
             messageLabel.setBorder(JBUI.Borders.empty(10));
             messageLabel.setIconTextGap(20);
-            DialogBuilder builder = new DialogBuilder(settingPanel).title("Failed to get latest release").centerPanel(messageLabel).resizable(false);
+            DialogBuilder builder = new DialogBuilder(settingPanel).title("Failed to Get Latest Release").centerPanel(messageLabel).resizable(false);
             builder.removeAllActions();
             builder.addOkAction();
             builder.show();
@@ -470,9 +467,21 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         }
     }
 
-    public boolean buttonActionPerformed(ActionEvent actionEvent) {
+    private boolean buttonActionPerformed(ActionEvent actionEvent) {
         modified = true;
         AbstractButton abstractButton = (AbstractButton) actionEvent.getSource();
         return abstractButton.getModel().isSelected();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void suggestLinters(ActionEvent actionEvent) {
+        if (linterTable.getRowCount() > 0) {
+            for (int r = 0; r < linterTable.getRowCount(); r++) {
+                String linter = ((Pair<Boolean, String>) linterTable.getValueAt(r, 0)).getSecond();
+                linterTable.setValueAt(Pair.create(suggestLinters.contains(linter), linter), r, 0);
+            }
+
+            modified = true;
+        }
     }
 }

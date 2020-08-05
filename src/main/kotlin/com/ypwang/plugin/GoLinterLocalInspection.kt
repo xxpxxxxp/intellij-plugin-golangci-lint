@@ -216,7 +216,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
             parameters.add("--maligned.suggest-new")
 
         // didn't find config in project root, nor the user selected use config file
-        if (!GoLinterConfig.useConfigFile && !customConfigDetected(project) && GoLinterConfig.enabledLinters != null) {
+        if (!customConfigDetected(project) && GoLinterConfig.enabledLinters != null) {
             parameters.add("--disable-all")
             parameters.add("-E")
             parameters.add(GoLinterConfig.enabledLinters!!.joinToString(","))
