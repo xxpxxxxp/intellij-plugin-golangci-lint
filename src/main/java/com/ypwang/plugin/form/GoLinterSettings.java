@@ -303,8 +303,10 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         }
         GoLinterConfig.INSTANCE.setUseCustomOptions(useCustomOptionsCheckBox.isSelected());
         GoLinterConfig.INSTANCE.setCustomOptions(customOptionsField.getText());
+        if (enabledLinters != null) {
+            GoLinterConfig.INSTANCE.setEnabledLinters(enabledLinters.toArray(new String[0]));
+        }
 
-        GoLinterConfig.INSTANCE.setEnabledLinters(enabledLinters.toArray(new String[0]));
         lastSavedTime = System.currentTimeMillis();
         modified = false;
     }
