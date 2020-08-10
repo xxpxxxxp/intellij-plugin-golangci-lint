@@ -53,8 +53,8 @@ import java.util.stream.Stream;
 
 public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private static final Set<String> suggestLinters = Stream.of(
-            "gosimple", "govet", "ineffassign", "staticcheck", "bodyclose", "dupl", "exportloopref", "funlen", "gocognit", "goconst",
-            "gocritic", "gocyclo", "goprintffuncname", "gosec", "interfacer", "maligned", "prealloc", "stylecheck", "uncovert", "whitespace"
+            "gosimple", "govet", "ineffassign", "staticcheck", "bodyclose", "dupl", "exportloopref", "funlen", "gocognit", "goconst", "golint",
+            "gocritic", "gocyclo", "goprintffuncname", "gosec", "interfacer", "maligned", "prealloc", "stylecheck", "unconvert", "whitespace"
     ).collect(Collectors.toSet());
     private static long lastSavedTime = Long.MIN_VALUE;
     public static long getLastSavedTime() {
@@ -74,13 +74,13 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private JTable linterTable;
 
     private LabelTableHeaderRender linterTableHeader;
-    private List<GoLinter> allLinters;
-    private Set<String> enabledLinters;
+    @Nullable private List<GoLinter> allLinters;
+    @Nullable private Set<String> enabledLinters;
 
     private boolean modified = false;
-    private HashSet<String> lintersInPath;
-    private final Project curProject;
-    private String linterPathSelected;
+    @NotNull private HashSet<String> lintersInPath;
+    @NotNull private final Project curProject;
+    @NotNull private String linterPathSelected;
     private String configFile = "";     // not suppose to change in current dialog
 
     public GoLinterSettings(@NotNull Project project) {
@@ -184,7 +184,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         linterChooseComboBox.setRenderer(new FileExistCellRender());
 
         // Components initialization
-        new ComponentValidator(curProject).withValidator(() -> {
+        new ComponentValidator(this).withValidator(() -> {
             String text = customOptionsField.getText();
             if (text.contains("-E") || text.contains("-D")) {
                 modified = false;
@@ -478,6 +478,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     @SuppressWarnings("unchecked")
     private void suggestLinters(ActionEvent actionEvent) {
         if (linterTable.getRowCount() > 0) {
+            enabledLinters = suggestLinters;
+            linterTableHeader.switchState(enabledLinters.size() != allLinters.size());
             for (int r = 0; r < linterTable.getRowCount(); r++) {
                 String linter = ((Pair<Boolean, String>) linterTable.getValueAt(r, 0)).getSecond();
                 linterTable.setValueAt(Pair.create(suggestLinters.contains(linter), linter), r, 0);

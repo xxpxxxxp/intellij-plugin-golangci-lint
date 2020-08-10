@@ -6,6 +6,7 @@ import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.model.LintReport
 import com.ypwang.plugin.model.RunProcessResult
 import java.io.File
+import java.util.Collections
 
 object GolangCiOutputParser {
     fun runProcess(params: List<String>, runningDir: String?, env: Map<String, String>): RunProcessResult =
@@ -16,12 +17,15 @@ object GolangCiOutputParser {
                 this.directory(File(runningDir))
         }.start())
 
-    fun parseIssues(result: RunProcessResult): List<LintIssue>? {
+    fun parseIssues(result: RunProcessResult): List<LintIssue> {
         assert(result.returnCode == 0 || result.returnCode == 1)
         return Gson().fromJson(
                 // because first line will be the "--maligned.suggest-new" flag deprecation warning
                 result.stdout.substring(result.stdout.indexOf('\n') + 1),
-                LintReport::class.java).Issues?.let { it.sortedWith(compareBy({ issue -> issue.Pos.Filename }, { issue -> issue.Pos.Line })) }
+                LintReport::class.java
+        ).Issues
+                ?.let { it.sortedWith(compareBy({ issue -> issue.Pos.Filename }, { issue -> issue.Pos.Line })) }
+                ?: Collections.emptyList()
     }
 
     fun parseLinters(result: RunProcessResult): List<GoLinter> {

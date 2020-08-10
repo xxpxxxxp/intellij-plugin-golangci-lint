@@ -156,16 +156,15 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         // cache not found or outdated
         // ====================================================================================================================================
         val project = manager.project
-        val (issues, success) = runAndProcessResult(project, module, buildParameters(file, project), buildEnvironment(project))
-        if (success) {
-            synchronized(cache) {
-                cache[module] = System.currentTimeMillis() to issues
-            }
+        val params = buildParameters(file, project) ?: return null
+        val issues = runAndProcessResult(project, module, params, buildEnvironment(project)) ?: return null
+        synchronized(cache) {
+            cache[module] = System.currentTimeMillis() to issues
         }
-        return issues?.let { matchAndShow(file, manager, isOnTheFly, it, matchName) }
+        return matchAndShow(file, manager, isOnTheFly, issues, matchName)
     }
 
-    private fun buildParameters(file: PsiFile, project: Project): List<String> {
+    private fun buildParameters(file: PsiFile, project: Project): List<String>? {
         // build parameters
         val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
         val provides = mutableSetOf<String>()
@@ -216,10 +215,17 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
             parameters.add("--maligned.suggest-new")
 
         // didn't find config in project root, nor the user selected use config file
-        if (!customConfigDetected(project) && GoLinterConfig.enabledLinters != null) {
-            parameters.add("--disable-all")
-            parameters.add("-E")
-            parameters.add(GoLinterConfig.enabledLinters!!.joinToString(","))
+        if (!customConfigDetected(project)) {
+            val enabledLinters = GoLinterConfig.enabledLinters
+            if (enabledLinters != null) {
+                // no linter is selected, skip run
+                if (enabledLinters.isEmpty())
+                    return null
+
+                parameters.add("--disable-all")
+                parameters.add("-E")
+                parameters.add(enabledLinters.joinToString(","))
+            }
         }
         parameters.add(".")
 
@@ -322,11 +328,13 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         return workload.result!!
     }
 
-    private fun runAndProcessResult(project: Project, module: String, parameters: List<String>, env: Map<String, String>): Pair<List<LintIssue>?, Boolean> {
+    // return issues (might be empty) if run succeed
+    // return null if run failed
+    private fun runAndProcessResult(project: Project, module: String, parameters: List<String>, env: Map<String, String>): List<LintIssue>? {
         val processResult = execute(module, parameters, env)
         when (processResult.returnCode) {
             // 0: no hint found; 1: hint found
-            0, 1 -> return GolangCiOutputParser.parseIssues(processResult) to true
+            0, 1 -> return GolangCiOutputParser.parseIssues(processResult)
             // run error
             else -> {
                 logger.warn("Run error: ${processResult.stderr}. Usually it's caused by wrongly configured parameters or corrupted with config file.")
@@ -339,7 +347,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
                     val notification = when {
                         processResult.stderr.contains("analysis skipped: errors in package") || processResult.stderr.contains("typechecking error") ->
                             // syntax error or package not found, programmer should fix that first
-                            return null to false
+                            return null
                         processResult.stderr.contains("Can't read config") ->
                             notificationGroup.createNotification(
                                     ErrorTitle,
@@ -414,7 +422,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         }
 
         // or skip current run
-        return null to false
+        return null
     }
 
     private fun matchAndShow(file: PsiFile, manager: InspectionManager, isOnTheFly: Boolean, issues: List<LintIssue>, matchName: String): Array<ProblemDescriptor>? {

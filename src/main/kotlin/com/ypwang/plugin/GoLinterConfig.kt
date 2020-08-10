@@ -1,6 +1,7 @@
 package com.ypwang.plugin
 
 import com.intellij.ide.util.PropertiesComponent
+import org.jetbrains.annotations.NotNull
 
 object GoLinterConfig {
     private const val GO_LINTER_EXE = "golangci-lint"
@@ -18,8 +19,8 @@ object GoLinterConfig {
         }
 
     var enabledLinters: Array<String>?
-        get() = properties.getValues(GO_ENABLED_LINTERS) as Array<String>?
-        set(value) = properties.setValues(GO_ENABLED_LINTERS, value)
+        get() = properties.getValues(GO_ENABLED_LINTERS)?.filter { it != null && it.isNotEmpty() }?.toTypedArray() as Array<String>?
+        set(@NotNull value) = properties.setValues(GO_ENABLED_LINTERS, value!!.filter { it.isNotEmpty() }.toTypedArray())
 
     var useCustomOptions: Boolean
         get() = properties.getBoolean(GO_USE_CUSTOM_OPTIONS, false)
