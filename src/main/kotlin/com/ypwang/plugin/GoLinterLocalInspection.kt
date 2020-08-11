@@ -51,7 +51,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
             if (varPath != null) {
                 var cur: Path? = Paths.get(varPath)
                 while (cur != null && cur.toFile().isDirectory) {
-                    for (s in arrayOf(".golangci.json", ".golangci.toml", ".golangci.yml")) {
+                    for (s in arrayOf(".golangci.json", ".golangci.toml", ".golangci.yml", ".golangci.yaml")) {
                         val f = cur.resolve(s).toFile()
                         if (f.exists() && f.isFile) { // found an valid config file
                             return f.path
