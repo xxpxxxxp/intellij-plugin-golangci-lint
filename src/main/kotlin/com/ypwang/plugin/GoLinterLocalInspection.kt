@@ -51,9 +51,9 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
             if (varPath != null) {
                 var cur: Path? = Paths.get(varPath)
                 while (cur != null && cur.toFile().isDirectory) {
-                    for (s in arrayOf(".golangci.json", ".golangci.toml", ".golangci.yml", ".golangci.yaml")) {
+                    for (s in arrayOf(".golangci.json", ".golangci.toml", ".golangci.yaml", ".golangci.yml")) { // ordered by precedence
                         val f = cur.resolve(s).toFile()
-                        if (f.exists() && f.isFile) { // found an valid config file
+                        if (f.exists() && f.isFile) { // found a valid config file
                             return f.path
                         }
                     }
@@ -165,7 +165,6 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
     }
 
     private fun buildParameters(file: PsiFile, project: Project): List<String>? {
-        // build parameters
         val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
         val provides = mutableSetOf<String>()
 
