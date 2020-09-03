@@ -9,6 +9,7 @@ import com.intellij.codeInspection.LocalQuickFixOnPsiElement
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
+import com.intellij.plugins.watcher.config.WatchersConfigurable
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiWhiteSpace
@@ -146,7 +147,7 @@ object GoErr113Handler : ProblemHandler() {
 
 object GoFumptHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
-            arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/gofumpt.md")) to null
+            arrayOf<LocalQuickFix>(GoOpenConfigurable("Config File Watchers"){ WatchersConfigurable(it) }) to null
 }
 
 object ExportLoopRefHandler : ProblemHandler() {
