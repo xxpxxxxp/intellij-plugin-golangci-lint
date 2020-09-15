@@ -86,7 +86,9 @@ object GoConstHandler : ProblemHandler() {
 object GoDotHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             chainFindAndHandle(file, document, issue, overrideLine) { element: PsiCommentImpl ->
-                arrayOf<LocalQuickFix>(GoDotFix(element)) to element.textRange
+                arrayOf<LocalQuickFix>(GoCommentFix(element, "Add '.' to the end") { project, comment ->
+                    GoElementFactory.createComment(project, comment.text + ".")
+                }) to element.textRange
             }
 }
 
@@ -195,7 +197,7 @@ object GoMndHandler : ProblemHandler() {
 private fun funcNoLintHandler(linter: String): ProblemHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionOrMethodDeclaration ->
-                arrayOf<LocalQuickFix>(NoLintFuncCommentFix(linter, element)) to null
+                arrayOf<LocalQuickFix>(NoLintFuncCommentFix(linter, element)) to element.identifier?.textRange
             }
 }
 

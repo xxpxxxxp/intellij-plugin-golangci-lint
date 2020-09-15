@@ -1,11 +1,13 @@
 package com.ypwang.plugin.handler
 
 import com.goide.psi.*
+import com.goide.psi.impl.GoElementFactory
 import com.goide.quickfix.GoRenameToQuickFix
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
+import com.intellij.psi.impl.source.tree.PsiCommentImpl
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.quickfix.*
 
@@ -49,6 +51,15 @@ object GoCriticHandler : ProblemHandler() {
                             arrayOf<LocalQuickFix>(GoDerefFix(element)) to element.textRange
                         else NonAvailableFix
                     }
+                issue.Text.startsWith("wrapperFunc:") ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoCallExpr ->
+                        if (element.expression.text.endsWith("Replace") && element.argumentList.expressionList.isNotEmpty()) {
+                            val lastArgument = element.argumentList.expressionList.last().value?.integer
+                            if (lastArgument != null && lastArgument < 0)
+                                return@chainFindAndHandle arrayOf<LocalQuickFix>(GoWrapperFuncFix(element)) to element.expression.textRange
+                        }
+                        NonAvailableFix
+                    }
                 issue.Text == "elseif: can replace 'else {if cond {}}' with 'else if cond {}'" -> {
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoElseStatement ->
                         if (element.block?.statementList?.size == 1)
@@ -60,12 +71,21 @@ object GoCriticHandler : ProblemHandler() {
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoSwitchStatement ->
                         // cannot handle type switch with var assign
                         val fix = if (element is GoTypeSwitchStatement && element.statement != null) EmptyLocalQuickFix
-                                  else arrayOf<LocalQuickFix>(GoSingleCaseSwitchFix(element))
+                        else arrayOf<LocalQuickFix>(GoSingleCaseSwitchFix(element))
                         fix to element.switchStart?.textRange
                     }
                 issue.Text == "ifElseChain: rewrite if-else to switch statement" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoIfStatement ->
                         arrayOf<LocalQuickFix>(GoIfToSwitchFix(element)) to element.`if`.textRange
+                    }
+                issue.Text == "commentFormatting: put a space between `//` and comment text" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: PsiCommentImpl ->
+                        if (element.text.startsWith("//"))
+                            arrayOf<LocalQuickFix>(GoCommentFix(element, "Add space") { project, comment ->
+                                GoElementFactory.createComment(project, "// " + comment.text.substring(2))
+                            }) to element.textRange
+                        else
+                            NonAvailableFix
                     }
                 else -> NonAvailableFix
             }
