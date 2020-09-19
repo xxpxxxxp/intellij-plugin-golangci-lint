@@ -10,11 +10,17 @@ import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.quickfix.*
 
 object GolintHandler : ProblemHandler() {
+    private val replaceRegex = Regex("""`([\w\d_]+)` should be `([\w\d_]+)`""")
+
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             when {
                 issue.Text == "`if` block ends with a `return` statement, so drop this `else` and outdent its block" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoElseStatement ->
                         arrayOf<LocalQuickFix>(GoOutdentElseFix(element)) to element.`else`.textRange
+                    }
+                issue.Text == "if block ends with a return statement, so drop this else and outdent its block (move short variable declaration to its own line if necessary)" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoIfStatement ->
+                        arrayOf<LocalQuickFix>(GoOutdentElseFix(element)) to element.`if`.textRange
                     }
                 issue.Text == "error should be the last type when returning multiple items" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionOrMethodDeclaration ->
@@ -57,28 +63,6 @@ object GolintHandler : ProblemHandler() {
                         } else NonAvailableFix
                     }
                 }
-                issue.Text.startsWith("var ")
-                        || issue.Text.startsWith("const ")
-                        || issue.Text.startsWith("type ")
-                        || issue.Text.startsWith("struct field ")
-                        || issue.Text.startsWith("interface method parameter") -> {
-                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoNamedElement ->
-                        val (curName, newName) = extractQuote(issue.Text, 2)
-                        if (element.identifier?.text == curName)
-                            arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, newName)) to element.identifier?.textRange
-                        else NonAvailableFix
-                    }
-                }
-                issue.Text.startsWith("func ") || issue.Text.startsWith("method ") -> {
-                    val match = Regex("""(func|method) ([\w\d_]+) should be ([\w\d_]+)""").matchEntire(issue.Text)
-                    if (match != null) {
-                        chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionOrMethodDeclaration ->
-                            if (element.identifier?.text == match.groups[2]!!.value)
-                                arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, match.groups[3]!!.value)) to element.identifier?.textRange
-                            else NonAvailableFix
-                        }
-                    } else NonAvailableFix
-                }
                 issue.Text.startsWith("receiver name ") -> {
                     val searchPattern = "receiver name "
                     var begin = issue.Text.indexOf(searchPattern) + searchPattern.length
@@ -93,6 +77,16 @@ object GolintHandler : ProblemHandler() {
                         } else NonAvailableFix
                     }
                 }
-                else -> NonAvailableFix
+                else -> {
+                    val match = replaceRegex.find(issue.Text)
+                    if (match != null)
+                        chainFindAndHandle(file, document, issue, overrideLine) { element: GoNamedElement ->
+                            if (element.identifier?.text == match.groups[1]!!.value)
+                                arrayOf<LocalQuickFix>(GoRenameToQuickFix(element, match.groups[2]!!.value)) to element.identifier?.textRange
+                            else NonAvailableFix
+                        }
+                    else
+                        NonAvailableFix
+                }
             }
 }

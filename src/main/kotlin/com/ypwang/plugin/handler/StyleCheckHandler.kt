@@ -1,14 +1,12 @@
 package com.ypwang.plugin.handler
 
-import com.goide.psi.GoCallExpr
-import com.goide.psi.GoConditionalExpr
-import com.goide.psi.GoLiteral
-import com.goide.psi.GoStringLiteral
+import com.goide.psi.*
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.ypwang.plugin.model.LintIssue
+import com.ypwang.plugin.quickfix.GoRemoveDuplImportFix
 import com.ypwang.plugin.quickfix.GoReplaceStringFix
 import com.ypwang.plugin.quickfix.GoSwapBinaryExprFix
 import org.apache.commons.lang.StringEscapeUtils
@@ -48,6 +46,14 @@ object StyleCheckHandler : ProblemHandler() {
                             }
                             "\"$sb\""
                         }) to element.textRange
+                    }
+                // package "xxx" is being imported more than once
+                "ST1019" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoImportSpec ->
+                        if ((file as GoFile).imports.filter { it.path == element.path }.all { !it.isForSideEffects && !it.isDot })
+                            arrayOf<LocalQuickFix>(GoRemoveDuplImportFix(element)) to element.textRange
+                        else
+                            NonAvailableFix
                     }
                 else -> NonAvailableFix
             }
