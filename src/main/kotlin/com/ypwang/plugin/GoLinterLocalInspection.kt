@@ -67,7 +67,6 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         private fun isSaved(file: PsiFile): Boolean {
             val virtualFile = file.virtualFile
             val fileEditorManager = FileEditorManager.getInstance(file.project)
-            if (!fileEditorManager.isFileOpen(virtualFile)) return true     // no editor opened, so data should be saved
 
             var saved = true
             val done = AtomicBoolean(false)       // here we use atomic variable as a spinlock
@@ -131,7 +130,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
             }
 
     override fun checkFile(file: PsiFile, manager: InspectionManager, isOnTheFly: Boolean): Array<ProblemDescriptor>? {
-        if (!File(GoLinterConfig.goLinterExe).canExecute()/* no linter executable */ || file !is GoFile) return null
+        if (file !is GoFile || !File(GoLinterConfig.goLinterExe).canExecute()/* no linter executable */) return null
 
         val absolutePath = Paths.get(file.virtualFile.path)     // file's absolute path
         val module = absolutePath.parent.toString()             // file's relative path to running dir

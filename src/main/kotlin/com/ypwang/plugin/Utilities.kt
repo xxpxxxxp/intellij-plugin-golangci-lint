@@ -100,7 +100,7 @@ fun getPlatformSpecificBinName(meta: GithubRelease): String {
 
 fun fetchLatestGoLinter(setText: (String) -> Unit, setFraction: (Double) -> Unit, cancelled: () -> Boolean): String {
     HttpClientBuilder.create().disableContentCompression().build().use { httpClient ->
-        setText("Get latest release meta")
+        setText("Getting latest release meta")
         val latest = getLatestReleaseMeta(httpClient)
 
         setFraction(0.2)
@@ -130,14 +130,19 @@ fun fetchLatestGoLinter(setText: (String) -> Unit, setFraction: (Double) -> Unit
         // "/tmp/golangci-lint-1.23.3-darwin-amd64.tar.gz"
         val tmp = Paths.get(tmpDir, binaryFileName).toString()
 
-        setText("Download $binaryFileName")
+        setText("Downloading $binaryFileName")
         httpClient.execute(HttpGet(asset.browserDownloadUrl)).use { response ->
             copy(response.entity.content, tmp, asset.size.toLong(), { f -> setFraction(0.2 + 0.6 * f) }, cancelled)
         }
 
-        setText("Decompress to $toFile")
+        setText("Decompressing to $toFile")
         decompressFun(tmp, toFile, { f -> setFraction(0.8 + 0.2 * f) }, cancelled)
         File(tmp).delete()
+
+        if (File(toFile).let { !it.canExecute() && !it.setExecutable(true) } ) {
+            throw Exception("Permission denied to execute $toFile")
+        }
+
         return toFile
     }
 }
