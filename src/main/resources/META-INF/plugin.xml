@@ -13,7 +13,7 @@
 <p>GolangCI-Lint is a linters aggregator. It performs a static code analysis to find some common issues and code style violations and provides fixes which can be applied to your code.</p>
 ]]></description>
 
-    <idea-version since-build="201"/>
+    <idea-version since-build="202"/>
 
     <!-- please see http://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
          on how to target different products -->
