@@ -1,5 +1,6 @@
 <idea-plugin>
     <extensions defaultExtensionNs="com.intellij.plugins.watcher">
+        <consumer implementation="com.ypwang.plugin.watchers.GoFumptTaskConsumer"/>
         <consumer implementation="com.ypwang.plugin.watchers.GoFumportsTaskConsumer"/>
         <filterFactory implementation="com.goide.watchers.GoToolTaskFilterFactory"/>
     </extensions>

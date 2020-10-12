@@ -26,6 +26,7 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 import com.jetbrains.rd.util.first
+import com.twelvemonkeys.util.LRUMap
 import com.ypwang.plugin.form.GoLinterSettings
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.model.RunProcessResult
@@ -113,7 +114,11 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
     private val workLoads = LinkedHashMap<String, GoLinterWorkLoad>()
 
     // cache module <> (timestamp, issues)
-    private val cache = mutableMapOf<String, Pair<Long, List<LintIssue>?>>()
+    /** Intellij share memory between instances
+     *  If multiple projects are opened, this plugin will cache a lot issues and eventually eat up all memory, slow down the IDE
+     *  use LRU map to reduce memory usage
+     */
+    private val cache = LRUMap<String, Pair<Long, List<LintIssue>?>>(13)
 
     private var customConfigFound: Boolean = false
     private var customConfigLastCheckTime = Long.MIN_VALUE
@@ -164,7 +169,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
     }
 
     private fun buildParameters(file: PsiFile, project: Project): List<String>? {
-        val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
+        val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json", "--allow-parallel-runners")
         val provides = mutableSetOf<String>()
 
         if (GoLinterConfig.useCustomOptions && GoLinterConfig.customOptions.isNotEmpty()) {
