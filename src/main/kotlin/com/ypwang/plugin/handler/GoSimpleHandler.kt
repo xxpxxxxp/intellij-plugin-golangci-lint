@@ -15,6 +15,12 @@ import com.ypwang.plugin.quickfix.*
 object GoSimpleHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             when (issue.Text.substring(0, issue.Text.indexOf(':'))) {
+                // should use a simple channel send/receive instead of `select` with a single case
+                "S1000" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoSelectStatement ->
+                        // it's safe to rewrite to if statement, to keeping variable life circles
+                        arrayOf<LocalQuickFix>(GoSimplifySimpleChanSelectFix(element)) to element.select.textRange
+                    }
                 // should omit comparison to bool constant, can be simplified to `...`
                 "S1002" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoConditionalExpr ->

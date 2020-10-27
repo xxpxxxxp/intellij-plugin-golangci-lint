@@ -54,7 +54,7 @@ import java.util.stream.Stream;
 public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private static final Set<String> suggestLinters = Stream.of(
             "gosimple", "govet", "ineffassign", "staticcheck", "bodyclose", "dupl", "exportloopref", "funlen", "gocognit", "goconst", "golint",
-            "gocritic", "gocyclo", "goprintffuncname", "gosec", "interfacer", "maligned", "prealloc", "stylecheck", "unconvert", "whitespace"
+            "gocritic", "gocyclo", "goprintffuncname", "gosec", "interfacer", "maligned", "prealloc", "stylecheck", "unconvert", "whitespace", "errorlint"
     ).collect(Collectors.toSet());
     private static long lastSavedTime = Long.MIN_VALUE;
     public static long getLastSavedTime() {

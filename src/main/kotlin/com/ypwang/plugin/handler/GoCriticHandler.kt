@@ -60,6 +60,16 @@ object GoCriticHandler : ProblemHandler() {
                         }
                         NonAvailableFix
                     }
+                issue.Text.startsWith("exitAfterDefer:") ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoCallExpr ->
+                        if (element.expression.text.contains(".Fatal")) {
+                            return@chainFindAndHandle arrayOf(
+                                    GoExitAfterDeferFix(element),
+                                    GoBringToExplanationFix("https://quasilyte.dev/blog/post/log-fatal-vs-log-panic/", "Why?")
+                            ) to element.expression.textRange
+                        }
+                        NonAvailableFix
+                    }
                 issue.Text == "elseif: can replace 'else {if cond {}}' with 'else if cond {}'" -> {
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoElseStatement ->
                         if (element.block?.statementList?.size == 1)

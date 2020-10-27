@@ -340,7 +340,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
             0, 1 -> return GolangCiOutputParser.parseIssues(processResult)
             // run error
             else -> {
-                logger.warn("Run error: ${processResult.stderr}. Usually it's caused by wrongly configured parameters or corrupted with config file.")
+                logger.warn("Run error: ${processResult.stderr}. Please make sure the project has no syntax error.")
 
                 val now = System.currentTimeMillis()
                 // freq cap 1min

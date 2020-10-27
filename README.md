@@ -19,23 +19,24 @@ After the plugin installed, you can see a popup on IDEA startup, or go to settin
 ![](explanation/init.png)
 
 A **golangci-lint** executable is needed. Choose one from combobox if you already have it in your PATH, or `Open...` select one from disk, or `Get Latest` download one from Github release.  
-Then select linters you need:
+
+If you have your own `.golangci.json`|`.golangci.toml`|`.golangci.yaml`|`.golangci.yml` config file, the plugin will detect and use it.  
+Otherwise, select linters you need:
 
 ![](explanation/settled.png)
 
-If you have your own golangci-lint config file, in most case the plugin will detect and use it. If it didn't, choose `I'm using custom config file` checkbox.  
 Click `OK`, you are all set!
 
-Please keep in mind that **golangci-lint** is a linter tool, **it only works if your project could build**, or it will report no issue.
+Please keep in mind that **golangci-lint** is a linter tool, **it only works if your project could build (no syntax error)**, or it will report no issue.
 
 ### For Windows users
-Please disable goimports / gofmt linters. Use [File-Watcher](https://tech.flyclops.com/posts/2016-06-14-goimports-intellij.html) in IDEA.  
-*It you insist using those 2 linters, download <a href="http://ftp.gnu.org/gnu/diffutils/">GNU diff</a> & <a href="https://ftp.gnu.org/pub/gnu/libiconv/">GNU LibIconv</a> and put them in system PATH (eg: C:\WINDOWS). Normally it's missing from the system.*
+Please disable goimports / gofmt / gci linters. Use [File-Watcher](https://tech.flyclops.com/posts/2016-06-14-goimports-intellij.html) in IDEA.  
+*It you insist using those 3 linters, download <a href="http://ftp.gnu.org/gnu/diffutils/">GNU diff</a> & <a href="https://ftp.gnu.org/pub/gnu/libiconv/">GNU LibIconv</a> and put them in system PATH (eg: C:\WINDOWS). Normally it's missing from the system.*
 
 ## Report a bug
 * Please note down your platform (Win/Linux/Mac), IDEA/Goland version, Go version
 * If the plugin reports an error, please copy-paste the error content
 
 ## What's next
-* Bug fix
+* Performance improvement
 * Code quality improvement

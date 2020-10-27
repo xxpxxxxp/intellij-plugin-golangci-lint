@@ -225,7 +225,8 @@ val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "gofumpt" to GoFumptHandler,
         "exportloopref" to ExportLoopRefHandler,
         "noctx" to NoCtxRefHandler,
-        "nlreturn" to NlReturnHandler
+        "nlreturn" to NlReturnHandler,
+        "errorlint" to ErrorLintHandler
     ).apply {
         this.putAll(listOf("structcheck", "varcheck", "deadcode", "unused").map { it to NamedElementHandler })
         this.putAll(ProblemHandler.FuncLinters.map { it to funcNoLintHandler(it) })
