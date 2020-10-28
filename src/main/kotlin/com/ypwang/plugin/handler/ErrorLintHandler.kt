@@ -7,6 +7,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.quickfix.GoBringToExplanationFix
+import com.ypwang.plugin.quickfix.GoErrorTypeAssertionFix
 import com.ypwang.plugin.quickfix.GoReplaceWithErrorsIsFix
 import com.ypwang.plugin.quickfix.GoWrapErrorFormatFix
 
@@ -31,8 +32,13 @@ object ErrorLintHandler : ProblemHandler() {
                 issue.Text == "non-wrapping format verb for fmt.Errorf. Use `%w` to format errors" ->
                     fixErrorfVerb(file, document, issue, overrideLine)
                 issue.Text == "type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" ->
-                    // TODO
-                    arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://golang.org/pkg/errors/#As", "Example & Best practice")) to null
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoTypeAssertionExpr ->
+                        val parent = element.parent
+                        // must check ok, otherwise we are expecting panic if assertion failed
+                        if (parent is GoShortVarDeclaration && parent.varDefinitionList.size == 2)
+                            arrayOf<LocalQuickFix>(GoErrorTypeAssertionFix(element, document.getLineStartOffset(overrideLine))) to element.textRange
+                        else NonAvailableFix
+                    }
                 issue.Text == "switch on an error will fail on wrapped errors. Use errors.Is to check for specific errors" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoSwitchStatement ->
                         arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://golang.org/pkg/errors/#Is", "Example & Best practice")) to element.switchStart?.textRange
