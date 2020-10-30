@@ -18,15 +18,13 @@ import com.intellij.openapi.project.Project
 import com.intellij.refactoring.RefactoringActionHandlerFactory
 import com.intellij.refactoring.rename.RenameHandlerRegistry
 
-class GoIntroduceConstStringLiteralFix(
-        private val file: GoFile,
-        private val literal: String
-) : LocalQuickFix {
+class GoIntroduceConstStringLiteralFix(private val literal: String) : LocalQuickFix {
     override fun getFamilyName(): String = "Introduce const string $literal"
 
     // Buggy, need improve
     override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
         try {
+            val file = descriptor.psiElement.containingFile as GoFile
             val content = FileDocumentManager.getInstance().getDocument(file.virtualFile)?.charsSequence ?: return
 
             val offsets = mutableListOf<Int>()

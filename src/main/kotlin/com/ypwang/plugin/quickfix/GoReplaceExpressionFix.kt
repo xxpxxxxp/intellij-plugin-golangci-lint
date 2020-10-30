@@ -1,18 +1,20 @@
 package com.ypwang.plugin.quickfix
 
 import com.goide.psi.impl.GoElementFactory
-import com.intellij.codeInspection.LocalQuickFix
-import com.intellij.codeInspection.ProblemDescriptor
+import com.intellij.codeInspection.LocalQuickFixOnPsiElement
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
 
 class GoReplaceExpressionFix(
         private val replacement: String,
-        private val element: PsiElement
-) : LocalQuickFix {
-    override fun getFamilyName(): String = "Replace with '$replacement'"
+        element: PsiElement
+) : LocalQuickFixOnPsiElement(element) {
+    override fun getFamilyName(): String = text
 
-    override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
-        element.replace(GoElementFactory.createExpression(project, replacement))
+    override fun getText(): String = "Replace with '$replacement'"
+
+    override fun invoke(project: Project, file: PsiFile, startElement: PsiElement, endElement: PsiElement) {
+        startElement.replace(GoElementFactory.createExpression(project, replacement))
     }
 }

@@ -2,14 +2,17 @@ package com.ypwang.plugin.quickfix
 
 import com.goide.psi.GoReferenceExpression
 import com.goide.quickfix.GoRenameToBlankQuickFix
-import com.intellij.codeInspection.LocalQuickFix
-import com.intellij.codeInspection.ProblemDescriptor
+import com.intellij.codeInspection.LocalQuickFixOnPsiElement
 import com.intellij.openapi.project.Project
+import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
 
-class GoReferenceRenameToBlankQuickFix(private val element: GoReferenceExpression): LocalQuickFix {
-    override fun getFamilyName(): String = GoRenameToBlankQuickFix.getQuickFixName()
+class GoReferenceRenameToBlankQuickFix(element: GoReferenceExpression): LocalQuickFixOnPsiElement(element) {
+    override fun getFamilyName(): String = text
 
-    override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
-        element.reference.handleElementRename("_")
+    override fun getText(): String = GoRenameToBlankQuickFix.getQuickFixName()
+
+    override fun invoke(project: Project, file: PsiFile, startElement: PsiElement, endElement: PsiElement) {
+        (startElement as GoReferenceExpression).reference.handleElementRename("_")
     }
 }

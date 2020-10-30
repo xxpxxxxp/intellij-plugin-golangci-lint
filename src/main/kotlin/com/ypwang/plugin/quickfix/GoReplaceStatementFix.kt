@@ -9,13 +9,13 @@ import com.intellij.psi.PsiFile
 
 class GoReplaceStatementFix(
         private val replacement: String,
-        val element: GoStatement
+        element: GoStatement
 ) : LocalQuickFixOnPsiElement(element) {
     override fun getFamilyName(): String = text
+
     override fun getText(): String = "Replace with '$replacement'"
 
     override fun invoke(project: Project, file: PsiFile, startElement: PsiElement, endElement: PsiElement) {
-        val element = startElement as GoStatement
-        element.replace(GoElementFactory.createStatement(project, replacement))
+        startElement.replace(GoElementFactory.createStatement(project, replacement))
     }
 }

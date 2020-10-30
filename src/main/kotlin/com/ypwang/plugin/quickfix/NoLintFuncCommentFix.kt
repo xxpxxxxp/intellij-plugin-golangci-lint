@@ -2,22 +2,22 @@ package com.ypwang.plugin.quickfix
 
 import com.goide.psi.GoFunctionOrMethodDeclaration
 import com.goide.psi.impl.GoElementFactory
-import com.intellij.codeInspection.LocalQuickFix
-import com.intellij.codeInspection.ProblemDescriptor
+import com.intellij.codeInspection.LocalQuickFixOnPsiElement
 import com.intellij.openapi.project.Project
-import com.intellij.psi.PsiComment
+import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
 
 class NoLintFuncCommentFix(
         private val linter: String,
-        private val func: GoFunctionOrMethodDeclaration
-): LocalQuickFix {
-    override fun getFamilyName(): String = "Suppress linter '$linter'" + (func.identifier?.let { " for func '${it.text}'" } ?: "")
+        private val funcName: String,
+        func: GoFunctionOrMethodDeclaration
+): LocalQuickFixOnPsiElement(func) {
+    override fun getFamilyName(): String = text
 
-    override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
-        val comment = GoElementFactory.createElement(project, "package a; \n //nolint:$linter\n}", PsiComment::class.java)
-        if (comment != null) {
-            func.parent.addBefore(comment, func)
-            func.parent.addBefore(GoElementFactory.createNewLine(project), func)
-        }
+    override fun getText(): String = "Suppress linter '$linter' for func '$funcName'"
+
+    override fun invoke(project: Project, file: PsiFile, startElement: PsiElement, endElement: PsiElement) {
+        startElement.parent.addBefore(GoElementFactory.createComment(project, "//nolint:$linter"), startElement)
+        startElement.parent.addBefore(GoElementFactory.createNewLine(project), startElement)
     }
 }

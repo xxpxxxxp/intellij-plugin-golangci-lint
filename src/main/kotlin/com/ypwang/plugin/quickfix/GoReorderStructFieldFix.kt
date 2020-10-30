@@ -5,22 +5,26 @@ import com.goide.psi.GoFile
 import com.goide.psi.GoStructType
 import com.goide.psi.GoTypeDeclaration
 import com.goide.psi.impl.GoElementFactory
-import com.intellij.codeInspection.LocalQuickFix
-import com.intellij.codeInspection.ProblemDescriptor
+import com.intellij.codeInspection.LocalQuickFixOnPsiElement
 import com.intellij.openapi.project.Project
+import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
 
 class GoReorderStructFieldFix(
         private val structName: String,
         private val replacement: String,
-        private val element: GoTypeDeclaration
-) : LocalQuickFix {
-    override fun getFamilyName(): String = "Reorder struct '$structName' (caution: comments will be left out & double check result!)"
+        element: GoTypeDeclaration
+) : LocalQuickFixOnPsiElement(element) {
+    override fun getFamilyName(): String = text
+
+    override fun getText(): String = "Reorder struct '$structName' (caution: comments will be left out & double check result!)"
 
     // reorder field is tricky, because we got limited info from maligned linter
     // and struct might have comment/tag/multi field on same line
     // so strict limitations is applied, we would rather do nothing than break the code
-    override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
+    override fun invoke(project: Project, file: PsiFile, startElement: PsiElement, endElement: PsiElement) {
         try {
+            val element = startElement as GoTypeDeclaration
             val originTypeDefinition = element.typeSpecList.single().specType.type as GoStructType
             val originFieldDeclaration = originTypeDefinition.fieldDeclarationList
             val originAnonymousFieldDeclaration = originFieldDeclaration.filter { it.anonymousFieldDefinition != null }
@@ -68,7 +72,7 @@ class GoReorderStructFieldFix(
                                 if (modulePath in importModuleToAlias)
                                     "${importModuleToAlias[modulePath] ?: module}.$rawType"
                                 else
-                                // for those not found, it's either imported by '_', or in current package
+                                    // for those not found, it's either imported by '_', or in current package
                                     rawType
                             }
 

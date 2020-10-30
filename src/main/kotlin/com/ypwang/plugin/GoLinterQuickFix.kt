@@ -79,7 +79,7 @@ object WhitespaceHandler : ProblemHandler() {
 object GoConstHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             chainFindAndHandle(file, document, issue, overrideLine) { element: GoStringLiteral ->
-                arrayOf<LocalQuickFix>(GoIntroduceConstStringLiteralFix(file as GoFile, element.text)) to element.textRange
+                arrayOf<LocalQuickFix>(GoIntroduceConstStringLiteralFix(element.text)) to element.textRange
             }
 }
 
@@ -181,7 +181,11 @@ object UnparamHandler : ProblemHandler() {
                 while (psiElement != null && psiElement !is GoFunctionOrMethodDeclaration)
                     psiElement = psiElement.parent
 
-                val fix = if (psiElement is GoFunctionOrMethodDeclaration) arrayOf<LocalQuickFix>(NoLintFuncCommentFix("unparam", psiElement)) else EmptyLocalQuickFix
+                val fix =
+                        if (psiElement is GoFunctionOrMethodDeclaration)
+                            arrayOf<LocalQuickFix>(NoLintFuncCommentFix("unparam", psiElement.identifier?.text ?: "_", psiElement))
+                        else
+                            EmptyLocalQuickFix
                 fix to element.textRange
             }
 }
@@ -197,7 +201,7 @@ object GoMndHandler : ProblemHandler() {
 private fun funcNoLintHandler(linter: String): ProblemHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionOrMethodDeclaration ->
-                arrayOf<LocalQuickFix>(NoLintFuncCommentFix(linter, element)) to element.identifier?.textRange
+                arrayOf<LocalQuickFix>(NoLintFuncCommentFix(linter, element.identifier?.text ?: "_", element)) to element.identifier?.textRange
             }
 }
 
