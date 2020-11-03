@@ -10,7 +10,7 @@ import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.quickfix.*
 
 object GolintHandler : ProblemHandler() {
-    private val replaceRegex = Regex("""`([\w\d_]+)` should be `([\w\d_]+)`""")
+    private val replaceRegex = Regex("""`?([\w\d_]+)`? should be `?([\w\d_]+)`?""")
 
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             when {

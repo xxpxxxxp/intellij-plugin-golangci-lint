@@ -26,7 +26,7 @@ def (String ver, String channel) = gitTag()
 group 'com.ypwang.plugin'
 version ver
 
-sourceCompatibility = 1.8
+sourceCompatibility = 11
 
 repositories {
     mavenCentral()
@@ -39,7 +39,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    compileOnly "org.jetbrains.kotlin:kotlin-stdlib"
 }
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
@@ -52,14 +52,14 @@ intellij {
 
 compileKotlin {
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "11"
         // Disable optimized callable references. See https://youtrack.jetbrains.com/issue/KT-37435
         freeCompilerArgs += "-Xno-optimized-callable-references"
     }
 }
 
 compileTestKotlin {
-    kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.jvmTarget = "11"
 }
 
 static def changeLog() {

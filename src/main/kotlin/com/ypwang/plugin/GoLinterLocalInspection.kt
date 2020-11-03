@@ -28,6 +28,7 @@ import com.intellij.psi.PsiFile
 import com.jetbrains.rd.util.first
 import com.twelvemonkeys.util.LRUMap
 import com.ypwang.plugin.form.GoLinterSettings
+import com.ypwang.plugin.handler.DefaultHandler
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.model.RunProcessResult
 import java.io.File
@@ -403,7 +404,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
                         else ->
                             notificationGroup.createNotification(
                                     ErrorTitle,
-                                    "Possibly invalid config or syntax error",
+                                    "Please make sure there's no syntax error, then check if any config error",
                                     NotificationType.ERROR,
                                     null as NotificationListener?).apply {
                                 this.addAction(NotificationAction.createSimple("Configure") {
@@ -470,7 +471,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
             if (lineNumber >= document.lineCount) continue
             try {
                 val handler = quickFixHandler.getOrDefault(issue.FromLinter, DefaultHandler)
-                val (quickFix, range) = handler.suggestFix(issue.FromLinter, file, document, issue, lineNumber)
+                val (quickFix, range) = handler.suggestFix(file, document, issue, lineNumber)
 
                 val zone = if (shiftCount == 0) beforeDirtyZone else afterDirtyZone
                 zone.add(manager.createProblemDescriptor(

@@ -76,7 +76,7 @@ fun fetchProcessOutput(process: Process): RunProcessResult {
 
 fun getLatestReleaseMeta(httpClient: CloseableHttpClient): GithubRelease =
         Gson().fromJson(
-                httpClient.execute(HttpGet("https://api.github.com/repos/golangci/golangci-lint/releases/latest")) .use { response ->
+                httpClient.execute(HttpGet("https://api.github.com/repos/golangci/golangci-lint/releases/latest")).use { response ->
                     CharStreams.toString(InputStreamReader(response.entity.content, Charset.defaultCharset()))
                 },
                 GithubRelease::class.java)
