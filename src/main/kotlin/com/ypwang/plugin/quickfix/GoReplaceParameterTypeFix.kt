@@ -29,7 +29,6 @@ class GoReplaceParameterTypeFix(
         // -1 means in current package / internal package, no need to import
         if (moduleCut != -1) {
             val goImport = GoImport("$pre${shortName.substring(0, moduleCut)}")
-            val file = startElement.containingFile
             CommandProcessor.getInstance().executeCommand(project, {
                 ApplicationManager.getApplication().runWriteAction {
                     if (alreadyImportedPackagesPaths(file).contains(goImport.importPath)) {

@@ -17,6 +17,19 @@ import org.apache.http.impl.client.HttpClientBuilder
 import java.nio.file.Paths
 
 class GoLinterSettingsTracker: StartupActivity.DumbAware {
+    override fun runActivity(project: Project) {
+        try {
+            if (GoLinterConfig.checkGoLinterExe) {
+                // check if golangci-lint is set
+                val version = getGolangCiVersion(GoLinterConfig.goLinterExe)
+                if (version.isEmpty()) noExecutableNotification(project)
+                else checkExecutableUpdate(version, project)
+            }
+        } catch (ignore: Throwable) {
+            // ignore
+        }
+    }
+
     private fun noExecutableNotification(project: Project) {
         notificationGroup.createNotification(
                 "Configure golangci-lint",
@@ -35,17 +48,30 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
         }.notify(project)
     }
 
-    private fun updateSucceedNotification(project: Project, latestMeta: GithubRelease) {
-        notificationGroup.createNotification(
-                "golangci-lint updated to ${latestMeta.name}",
-                latestMeta.body,
-                NotificationType.INFORMATION
-        ).apply {
-            this.addAction(NotificationAction.createSimple("Check config") {
-                ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
-                this.expire()
-            })
-        }.notify(project)
+    private fun checkExecutableUpdate(curVersion: String, project: Project) {
+        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "check golangci-lint updates") {
+            override fun run(pi: ProgressIndicator) {
+                pi.isIndeterminate = true
+
+                val timeout = 3000
+                try {
+                    val latestMeta = HttpClientBuilder.create()
+                            .disableContentCompression()
+                            .setDefaultRequestConfig(RequestConfig.custom()
+                                    .setConnectTimeout(timeout)
+                                    .setConnectionRequestTimeout(timeout)
+                                    .setSocketTimeout(timeout).build())
+                            .build()
+                            .use { getLatestReleaseMeta(it) }
+                    val latestVersion = latestMeta.name.substring(1)
+                    val versionDiff = latestVersion.split('.').zip(curVersion.split('.')).firstOrNull { it.first != it.second } ?: return
+                    if (versionDiff.first.toInt() > versionDiff.second.toInt())
+                        updateNotification(project, latestMeta)
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+        })
     }
 
     private fun updateNotification(project: Project, latestMeta: GithubRelease) {
@@ -82,42 +108,16 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
         }.notify(project)
     }
 
-    private fun checkExecutableUpdate(curVersion: String, project: Project) {
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "check golangci-lint updates") {
-            override fun run(pi: ProgressIndicator) {
-                pi.isIndeterminate = true
-
-                val timeout = 3000
-                try {
-                    val latestMeta = HttpClientBuilder.create()
-                            .disableContentCompression()
-                            .setDefaultRequestConfig(RequestConfig.custom()
-                                    .setConnectTimeout(timeout)
-                                    .setConnectionRequestTimeout(timeout)
-                                    .setSocketTimeout(timeout).build())
-                            .build()
-                            .use { getLatestReleaseMeta(it) }
-                    val latestVersion = latestMeta.name.substring(1)
-                    val versionDiff = latestVersion.split('.').zip(curVersion.split('.')).firstOrNull { it.first != it.second } ?: return
-                    if (versionDiff.first.toInt() > versionDiff.second.toInt())
-                        updateNotification(project, latestMeta)
-                } catch (e: Exception) {
-                    // ignore
-                }
-            }
-        })
-    }
-
-    override fun runActivity(project: Project) {
-        try {
-            if (GoLinterConfig.checkGoLinterExe) {
-                // check if golangci-lint is set
-                val version = getGolangCiVersion(GoLinterConfig.goLinterExe)
-                if (version.isEmpty()) noExecutableNotification(project)
-                else checkExecutableUpdate(version, project)
-            }
-        } catch (ignore: Throwable) {
-            // ignore
-        }
+    private fun updateSucceedNotification(project: Project, latestMeta: GithubRelease) {
+        notificationGroup.createNotification(
+                "golangci-lint updated to ${latestMeta.name}",
+                latestMeta.body,
+                NotificationType.INFORMATION
+        ).apply {
+            this.addAction(NotificationAction.createSimple("Check config") {
+                ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
+                this.expire()
+            })
+        }.notify(project)
     }
 }

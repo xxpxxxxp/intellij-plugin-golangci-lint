@@ -20,11 +20,11 @@ object GolangCiOutputParser {
     fun parseIssues(result: RunProcessResult): List<LintIssue> {
         assert(result.returnCode == 0 || result.returnCode == 1)
         return Gson().fromJson(
-                // because first line will be the "--maligned.suggest-new" flag deprecation warning
-                result.stdout.substring(result.stdout.indexOf('\n') + 1),
-                LintReport::class.java
-        ).Issues
-                ?.let { it.sortedWith(compareBy({ issue -> issue.Pos.Filename }, { issue -> issue.Pos.Line })) }
+            // because first line will be the "--maligned.suggest-new" flag deprecation warning
+            result.stdout.substring(result.stdout.indexOf('\n') + 1),
+            LintReport::class.java)
+                .Issues
+                ?.sortedWith(compareBy({ issue -> issue.Pos.Filename }, { issue -> issue.Pos.Line }))
                 ?: Collections.emptyList()
     }
 

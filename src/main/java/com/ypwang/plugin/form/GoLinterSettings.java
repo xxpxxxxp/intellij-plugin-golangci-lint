@@ -28,7 +28,6 @@ import com.intellij.util.ui.AsyncProcessIcon;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import com.ypwang.plugin.GoLinterConfig;
-import com.ypwang.plugin.GoLinterLocalInspection;
 import com.ypwang.plugin.GolangCiOutputParser;
 import com.ypwang.plugin.UtilitiesKt;
 import com.ypwang.plugin.model.GoLinter;
@@ -81,7 +80,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     @NotNull private HashSet<String> lintersInPath;
     @NotNull private final Project curProject;
     @NotNull private String linterPathSelected;
-    private String configFile = "";     // not suppose to change in current dialog
+    private Optional<String> configFile;     // not suppose to change in current dialog
 
     public GoLinterSettings(@NotNull Project project) {
         curProject = project;
@@ -207,24 +206,27 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
         lintersInPath = getLinterFromPath();
 
-        configFile = GoLinterLocalInspection.Companion.findCustomConfigInPath(curProject.getBasePath());
-        if (!configFile.isEmpty()) {
-            // found an valid config file
-            multiLabel = new LinkLabel<String>(
-                    String.format("Using %s", configFile), null, (aSource, aLinkData) -> {
-                try {
-                    Desktop.getDesktop().open(new File(configFile));
-                } catch (Exception e) {
-                    // ignore
+        configFile = UtilitiesKt.findCustomConfigInPath(curProject.getBasePath());
+        configFile.ifPresentOrElse(
+                f -> {
+                    // found an valid config file
+                    multiLabel = new LinkLabel<String>(
+                            String.format("Using %s", configFile), null, (aSource, aLinkData) -> {
+                        try {
+                            Desktop.getDesktop().open(new File(f));
+                        } catch (Exception e) {
+                            // ignore
+                        }
+                    });
+                    linterTable.setEnabled(false);
+                },
+                () -> {
+                    JButton tmp = new JButton("Suggest me!");
+                    tmp.setEnabled(false);
+                    tmp.addActionListener(this::suggestLinters);
+                    multiLabel = tmp;
                 }
-            });
-            linterTable.setEnabled(false);
-        } else {
-            JButton tmp = new JButton("Suggest me!");
-            tmp.setEnabled(false);
-            tmp.addActionListener(this::suggestLinters);
-            multiLabel = tmp;
-        }
+        );
     }
 
     // refresh lintersTable with selected item of linterComboBox

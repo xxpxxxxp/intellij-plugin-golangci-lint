@@ -13,46 +13,37 @@ import org.apache.http.impl.client.CloseableHttpClient
 import org.apache.http.impl.client.HttpClientBuilder
 import java.io.*
 import java.nio.charset.Charset
+import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.*
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 
 private const val LinterName = "golangci-lint"
 private const val notificationGroupName = "Go linter notifications"
+private val configFiles = arrayOf(".golangci.json", ".golangci.toml", ".golangci.yaml", ".golangci.yml")  // ordered by precedence
 
 val logger = Logger.getInstance("go-linter")
 val notificationGroup = NotificationGroup.findRegisteredGroup(notificationGroupName) ?: NotificationGroup.balloonGroup(notificationGroupName)
 val linterExecutableName = if (SystemInfo.isWindows) "$LinterName.exe" else LinterName
 val executionDir: String = if (SystemInfo.isWindows) System.getenv("PUBLIC") else "/usr/local/bin"
 
-private val OS: String by lazy {
-    when {
-        SystemInfo.isWindows -> "windows"
-        SystemInfo.isLinux -> "linux"
-        SystemInfo.isMac -> "darwin"
-        else -> throw Exception("Unknown system type: ${SystemInfo.OS_NAME}")
-    }
-}
-
-private class OutputReader(val inputStream: InputStream, val consumer: ByteArrayOutputStream) : Runnable {
-    override fun run() = try {
-        val buf = ByteArray(1024)
-        while (true) {
-            val count = inputStream.read(buf)
-            if (count == -1) break
-            consumer.write(buf, 0, count)
-        }
-    } catch (e: IOException) {
-        Logger.getInstance(this.javaClass).error(e)
-    }
-
-    companion object {
-        fun fetch(inputStream: InputStream, consumer: ByteArrayOutputStream): Thread {
-            val thread = Thread(OutputReader(inputStream, consumer))
-            thread.start()
-            return thread
+fun findCustomConfigInPath(path: String?): Optional<String> {
+    val varPath: String? = path
+    if (varPath != null) {
+        var cur: Path? = Paths.get(varPath)
+        while (cur != null && cur.toFile().isDirectory) {
+            for (s in configFiles) {
+                val f = cur.resolve(s).toFile()
+                if (f.exists() && f.isFile) { // found a valid config file
+                    return Optional.of(f.path)
+                }
+            }
+            cur = cur.parent
         }
     }
+
+    return Optional.empty()
 }
 
 fun fetchProcessOutput(process: Process): RunProcessResult {
@@ -139,7 +130,7 @@ fun fetchLatestGoLinter(setText: (String) -> Unit, setFraction: (Double) -> Unit
         decompressFun(tmp, toFile, { f -> setFraction(0.8 + 0.2 * f) }, cancelled)
         File(tmp).delete()
 
-        if (File(toFile).let { !it.canExecute() && !it.setExecutable(true) } ) {
+        if (File(toFile).let { !it.canExecute() && !it.setExecutable(true) }) {
             throw Exception("Permission denied to execute $toFile")
         }
 
@@ -221,4 +212,34 @@ fun getGolangCiVersion(path: String): String {
     if (rst.returnCode != 0) return ""
     val regex = Regex("""golangci-lint has version ([\d.]+) built from \w+ on [\w-:]+\n""")
     return regex.matchEntire(rst.stderr)?.let { it.groups[1]!!.value } ?: ""
+}
+
+private val OS: String by lazy {
+    when {
+        SystemInfo.isWindows -> "windows"
+        SystemInfo.isLinux -> "linux"
+        SystemInfo.isMac -> "darwin"
+        else -> throw Exception("Unknown system type: ${SystemInfo.OS_NAME}")
+    }
+}
+
+private class OutputReader(val inputStream: InputStream, val consumer: ByteArrayOutputStream) : Runnable {
+    override fun run() = try {
+        val buf = ByteArray(1024)
+        while (true) {
+            val count = inputStream.read(buf)
+            if (count == -1) break
+            consumer.write(buf, 0, count)
+        }
+    } catch (e: IOException) {
+        Logger.getInstance(this.javaClass).error(e)
+    }
+
+    companion object {
+        fun fetch(inputStream: InputStream, consumer: ByteArrayOutputStream): Thread {
+            val thread = Thread(OutputReader(inputStream, consumer))
+            thread.start()
+            return thread
+        }
+    }
 }

@@ -32,87 +32,55 @@ import com.ypwang.plugin.handler.DefaultHandler
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.model.RunProcessResult
 import java.io.File
-import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.ReentrantLock
+import kotlin.collections.LinkedHashMap
 import kotlin.concurrent.withLock
+
+private class GoLinterWorkLoad {
+    val executionMutex = ReentrantLock()
+    val executionCondition: Condition = executionMutex.newCondition()
+    val broadcastMutex = ReentrantLock()
+    val broadcastCondition: Condition = broadcastMutex.newCondition()
+    var result: RunProcessResult? = null
+}
 
 class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool {
     companion object {
         private const val ErrorTitle = "Go linter running error"
         private const val notificationFrequencyCap = 60 * 1000L
 
+        // Intellij create different instances for multiple projects
+        // limit golangci-lint concurrency, save CPU resource
+        // consumer queue
+        private val executionLock = AtomicBoolean(false)
+        private val workloadsLock = ReentrantLock()
+        private val workLoads = LinkedHashMap<String, GoLinterWorkLoad>()
+
         private val systemPath = System.getenv("PATH")
         private val systemGoPath = System.getenv("GOPATH")      // immutable in current idea process
-
-        fun findCustomConfigInPath(path: String?): String {
-            val varPath: String? = path
-            if (varPath != null) {
-                var cur: Path? = Paths.get(varPath)
-                while (cur != null && cur.toFile().isDirectory) {
-                    for (s in arrayOf(".golangci.json", ".golangci.toml", ".golangci.yaml", ".golangci.yml")) { // ordered by precedence
-                        val f = cur.resolve(s).toFile()
-                        if (f.exists() && f.isFile) { // found a valid config file
-                            return f.path
-                        }
-                    }
-                    cur = cur.parent
-                }
-            }
-
-            return ""
-        }
-
-        private fun isSaved(file: PsiFile): Boolean {
-            val virtualFile = file.virtualFile
-            val fileEditorManager = FileEditorManager.getInstance(file.project)
-
-            var saved = true
-            val done = AtomicBoolean(false)       // here we use atomic variable as a spinlock
-
-            ApplicationManager.getApplication().invokeLater {
-                // ideally there should be 1 editor, unless in split view
-                for (editor in fileEditorManager.getEditors(virtualFile)) {
-                    if (editor.isModified) {
-                        saved = false
-                        break
-                    }
-                }
-                done.set(true)
-            }
-
-            val now = System.currentTimeMillis()
-            while (!done.compareAndSet(true, false)) {
-                // as a last resort, break the loop on timeout
-                if (System.currentTimeMillis() - now > 1000) {
-                    // may hang for 1s, hope that never happen
-                    logger.info("Cannot get confirmation from dispatch thread, break the loop")
-                    return false
-                }
-            }
-
-            return saved
-        }
     }
 
-    private class GoLinterWorkLoad {
-        val executionMutex = ReentrantLock()
-        val executionCondition: Condition = executionMutex.newCondition()
-        val broadcastMutex = ReentrantLock()
-        val broadcastCondition: Condition = broadcastMutex.newCondition()
-        var result: RunProcessResult? = null
-    }
-
+    // reduce error show freq
     private var showError = true
-    private val notificationLastTime = AtomicLong(-1L)
+    private var notificationLastTime = -1L
 
-    // consumer queue
-    private val executionLock = AtomicBoolean(false)
-    private val workloadsLock = ReentrantLock()
-    private val workLoads = LinkedHashMap<String, GoLinterWorkLoad>()
+    // cache config search to save time
+    private var customConfig: Optional<String> = Optional.empty()
+    private var customConfigLastCheckTime = Long.MIN_VALUE
+    private fun customConfigDetected(project: Project): Optional<String> =
+            // cache the result max 10s
+            System.currentTimeMillis().let {
+                if (customConfigLastCheckTime + 60000 < it) {
+                    customConfig = findCustomConfigInPath(project.basePath)
+                    customConfigLastCheckTime = it
+                }
+
+                customConfig
+            }
 
     // cache module <> (timestamp, issues)
     /** Intellij share memory between instances
@@ -120,20 +88,6 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
      *  use LRU map to reduce memory usage
      */
     private val cache = LRUMap<String, Pair<Long, List<LintIssue>?>>(13)
-
-    private var customConfigFound: Boolean = false
-    private var customConfigLastCheckTime = Long.MIN_VALUE
-
-    private fun customConfigDetected(project: Project): Boolean =
-            // cache the result max 10s
-            System.currentTimeMillis().let {
-                if (customConfigLastCheckTime + 10000 < it) {
-                    customConfigFound = findCustomConfigInPath(project.basePath).isNotEmpty()
-                    customConfigLastCheckTime = it
-                }
-
-                customConfigFound
-            }
 
     override fun checkFile(file: PsiFile, manager: InspectionManager, isOnTheFly: Boolean): Array<ProblemDescriptor>? {
         if (file !is GoFile || !File(GoLinterConfig.goLinterExe).canExecute()/* no linter executable */) return null
@@ -169,14 +123,54 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         return matchAndShow(file, manager, isOnTheFly, issues, matchName)
     }
 
+    private fun isSaved(file: PsiFile): Boolean {
+        val virtualFile = file.virtualFile
+        val fileEditorManager = FileEditorManager.getInstance(file.project)
+
+        var saved = true
+        val done = AtomicBoolean(false)       // here we use atomic variable as a spinlock
+
+        ApplicationManager.getApplication().invokeLater {
+            // ideally there should be 1 editor, unless in split view
+            for (editor in fileEditorManager.getEditors(virtualFile)) {
+                if (editor.isModified) {
+                    saved = false
+                    break
+                }
+            }
+            done.set(true)
+        }
+
+        val now = System.currentTimeMillis()
+        while (!done.compareAndSet(true, false)) {
+            // as a last resort, break the loop on timeout
+            if (System.currentTimeMillis() - now > 1000) {
+                // may hang for 1s, hope that never happen
+                logger.info("Cannot get confirmation from dispatch thread, break the loop")
+                return false
+            }
+        }
+
+        return saved
+    }
+
     private fun buildParameters(file: PsiFile, project: Project): List<String>? {
-        val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json", "--allow-parallel-runners")
+        val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
         val provides = mutableSetOf<String>()
 
-        if (GoLinterConfig.useCustomOptions && GoLinterConfig.customOptions.isNotEmpty()) {
-            val breaks = GoLinterConfig.customOptions.split(" ")
-            parameters.addAll(breaks)
-            provides.addAll(breaks)
+        val conf = customConfigDetected(project)
+        if (!conf.isPresent) {
+            // use default linters
+            val enabledLinters = GoLinterConfig.enabledLinters
+            if (enabledLinters != null) {
+                // no linter is selected, skip run
+                if (enabledLinters.isEmpty())
+                    return null
+
+                parameters.add("--disable-all")
+                parameters.add("-E")
+                parameters.add(enabledLinters.joinToString(","))
+            }
         }
 
         if (!provides.contains("--build-tags")) {
@@ -198,8 +192,8 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         }
 
         // don't use to much CPU
-        if (!provides.contains("--concurrency")) {
-            parameters.add("--concurrency")
+        if (!provides.contains("-j")) {
+            parameters.add("-j")
             // runtime should have at least 1 available processor, right?
             parameters.add(((Runtime.getRuntime().availableProcessors() + 3) / 4).toString())
         }
@@ -218,19 +212,12 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         if (!provides.contains("--maligned.suggest-new"))
             parameters.add("--maligned.suggest-new")
 
-        // didn't find config in project root, nor the user selected use config file
-        if (!customConfigDetected(project)) {
-            val enabledLinters = GoLinterConfig.enabledLinters
-            if (enabledLinters != null) {
-                // no linter is selected, skip run
-                if (enabledLinters.isEmpty())
-                    return null
-
-                parameters.add("--disable-all")
-                parameters.add("-E")
-                parameters.add(enabledLinters.joinToString(","))
-            }
+        if (GoLinterConfig.useCustomOptions && GoLinterConfig.customOptions.isNotEmpty()) {
+            val breaks = GoLinterConfig.customOptions.split(" ")
+            parameters.addAll(breaks)
+            provides.addAll(breaks)
         }
+
         parameters.add(".")
 
         return parameters
@@ -242,7 +229,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         val goPluginSettings = GoProjectLibrariesService.getInstance(project)
         val goPaths = goPluginSettings.libraryRootUrls.map { Paths.get(VirtualFileManager.extractPath(it)).toString() }.toMutableList().apply {
             if (goPluginSettings.isUseGoPathFromSystemEnvironment) {
-                this.addAll(GoApplicationLibrariesService.getInstance().libraryRootUrls.map { p -> Paths.get(VirtualFileManager.extractPath(p)).toString() })
+                this.addAll(GoApplicationLibrariesService.getInstance().libraryRootUrls.map { Paths.get(VirtualFileManager.extractPath(it)).toString() })
                 if (systemGoPath != null)
                     this.add(systemGoPath)
             }
@@ -345,7 +332,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
 
                 val now = System.currentTimeMillis()
                 // freq cap 1min
-                if (showError && (notificationLastTime.get() + notificationFrequencyCap) < now) {
+                if (showError && (notificationLastTime + notificationFrequencyCap) < now) {
                     logger.warn("Debug command: ${ buildCommand(module, parameters, env) }")
 
                     val notification = when {
@@ -359,13 +346,14 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
                                     NotificationType.ERROR,
                                     null as NotificationListener?).apply {
                                 // find the config file
-                                val configFilePath = findCustomConfigInPath(module)
-                                val configFile = File(configFilePath)
-                                if (configFile.exists()) {
-                                    this.addAction(NotificationAction.createSimple("Open ${configFile.name}") {
-                                        OpenFileDescriptor(project, LocalFileSystem.getInstance().findFileByIoFile(configFile)!!).navigate(true)
-                                        this.expire()
-                                    })
+                                findCustomConfigInPath(module).ifPresent {
+                                    val configFile = File(it)
+                                    if (configFile.exists()) {
+                                        this.addAction(NotificationAction.createSimple("Open ${configFile.name}") {
+                                            OpenFileDescriptor(project, LocalFileSystem.getInstance().findFileByIoFile(configFile)!!).navigate(true)
+                                            this.expire()
+                                        })
+                                    }
                                 }
                             }
                         processResult.stderr.contains("all linters were disabled, but no one linter was enabled") ->
@@ -420,7 +408,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
                     })
 
                     notification.notify(project)
-                    notificationLastTime.set(now)
+                    notificationLastTime = now
                 }
             }
         }

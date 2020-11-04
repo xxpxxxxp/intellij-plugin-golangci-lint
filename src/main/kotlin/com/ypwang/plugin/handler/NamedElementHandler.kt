@@ -2,7 +2,12 @@ package com.ypwang.plugin.handler
 
 import com.goide.inspections.GoInspectionUtil
 import com.goide.psi.*
-import com.goide.quickfix.*
+import com.goide.quickfix.GoDeleteConstDefinitionQuickFix
+import com.goide.quickfix.GoDeleteQuickFix.Fixes.DELETE_FUNCTION_FIX
+import com.goide.quickfix.GoDeleteQuickFix.Fixes.DELETE_TYPE_FIX
+import com.goide.quickfix.GoDeleteRangeQuickFix
+import com.goide.quickfix.GoDeleteVarDefinitionQuickFix
+import com.goide.quickfix.GoRenameToBlankQuickFix
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
@@ -31,9 +36,9 @@ object NamedElementHandler : ProblemHandler() {
                         } else arrayOf()
                     }
                     is GoFunctionDeclaration ->
-                        arrayOf(GoDeleteQuickFix("Delete function ${element.identifier.text}", GoFunctionDeclaration::class.java), GoRenameToBlankQuickFix(element))
+                        arrayOf(DELETE_FUNCTION_FIX, GoRenameToBlankQuickFix(element))
                     is GoTypeSpec ->
-                        arrayOf<LocalQuickFix>(GoDeleteTypeQuickFix(element.identifier.text))
+                        arrayOf<LocalQuickFix>(DELETE_TYPE_FIX)
                     is GoVarDefinition ->
                         (if (GoInspectionUtil.canDeleteDefinition(element)) arrayOf(GoRenameToBlankQuickFix(element), GoDeleteVarDefinitionQuickFix(element.name))
                         else arrayOf<LocalQuickFix>(GoRenameToBlankQuickFix(element)))
