@@ -15,6 +15,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.impl.source.tree.PsiWhiteSpaceImpl
 import com.ypwang.plugin.model.LintIssue
+import com.ypwang.plugin.quickfix.GoDeleteElementsFix
 
 object NamedElementHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
@@ -44,8 +45,8 @@ object NamedElementHandler : ProblemHandler() {
                         else arrayOf<LocalQuickFix>(GoRenameToBlankQuickFix(element)))
                     is GoConstDefinition ->
                         (if (GoInspectionUtil.canDeleteDefinition(element)) arrayOf<LocalQuickFix>(GoDeleteConstDefinitionQuickFix(element.name)) else arrayOf())
-//                    is GoMethodDeclaration -> arrayOf(GoDeleteQuickFix("Delete function", GoMethodDeclaration::class.java), GoRenameToBlankQuickFix(element))
-//                    is GoLightMethodDeclaration -> arrayOf(GoDeleteQuickFix("Delete function", GoLightMethodDeclaration::class.java), GoRenameToBlankQuickFix(element))
+                    is GoMethodDeclaration ->
+                        arrayOf<LocalQuickFix>(GoDeleteElementsFix(listOf(element), "Delete method"))
                     else -> EmptyLocalQuickFix
                 } to element.identifier?.textRange
             }

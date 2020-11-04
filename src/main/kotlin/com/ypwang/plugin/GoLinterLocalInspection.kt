@@ -35,6 +35,7 @@ import java.io.File
 import java.nio.file.Paths
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.collections.LinkedHashMap
@@ -66,17 +67,17 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
 
     // reduce error show freq
     private var showError = true
-    private var notificationLastTime = -1L
+    private var notificationLastTime = AtomicLong(-1)
 
     // cache config search to save time
     private var customConfig: Optional<String> = Optional.empty()
-    private var customConfigLastCheckTime = Long.MIN_VALUE
+    private var customConfigLastCheckTime = AtomicLong(-1)
     private fun customConfigDetected(project: Project): Optional<String> =
             // cache the result max 10s
             System.currentTimeMillis().let {
-                if (customConfigLastCheckTime + 60000 < it) {
+                if (customConfigLastCheckTime.get() + 60000 < it) {
                     customConfig = findCustomConfigInPath(project.basePath)
-                    customConfigLastCheckTime = it
+                    customConfigLastCheckTime.set(it)
                 }
 
                 customConfig
@@ -155,7 +156,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
     }
 
     private fun buildParameters(file: PsiFile, project: Project): List<String>? {
-        val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json")
+        val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json", "--allow-parallel-runners")
         val provides = mutableSetOf<String>()
 
         val conf = customConfigDetected(project)
@@ -332,7 +333,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
 
                 val now = System.currentTimeMillis()
                 // freq cap 1min
-                if (showError && (notificationLastTime + notificationFrequencyCap) < now) {
+                if (showError && (notificationLastTime.get() + notificationFrequencyCap) < now) {
                     logger.warn("Debug command: ${ buildCommand(module, parameters, env) }")
 
                     val notification = when {
@@ -408,7 +409,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
                     })
 
                     notification.notify(project)
-                    notificationLastTime = now
+                    notificationLastTime.set(now)
                 }
             }
         }

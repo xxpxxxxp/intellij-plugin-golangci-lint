@@ -211,7 +211,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                 f -> {
                     // found an valid config file
                     multiLabel = new LinkLabel<String>(
-                            String.format("Using %s", configFile), null, (aSource, aLinkData) -> {
+                            String.format("Using %s", f), null, (aSource, aLinkData) -> {
                         try {
                             Desktop.getDesktop().open(new File(f));
                         } catch (Exception e) {

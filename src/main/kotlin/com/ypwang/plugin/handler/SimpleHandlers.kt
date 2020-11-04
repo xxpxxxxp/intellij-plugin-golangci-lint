@@ -193,7 +193,7 @@ object UnparamHandler : ProblemHandler() {
 object GoMndHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             chainFindAndHandle(file, document, issue, overrideLine) { element: GoLiteralImpl ->
-                EmptyLocalQuickFix to element.textRange
+                arrayOf<LocalQuickFix>(NoLintSingleLineCommentFix(issue.FromLinter)) to element.textRange
             }
 }
 
