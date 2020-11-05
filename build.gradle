@@ -26,16 +26,8 @@ def (String ver, String channel) = gitTag()
 group 'com.ypwang.plugin'
 version ver
 
-sourceCompatibility = 11
-
 repositories {
     mavenCentral()
-    maven {
-        url "https://oss.sonatype.org/content/repositories/snapshots/"
-    }
-    maven {
-        url 'https://dl.bintray.com/jetbrains/intellij-plugin-service'
-    }
 }
 
 dependencies {
