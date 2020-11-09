@@ -21,9 +21,10 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
         try {
             if (GoLinterConfig.checkGoLinterExe) {
                 // check if golangci-lint is set
-                val version = getGolangCiVersion(GoLinterConfig.goLinterExe)
-                if (version.isEmpty()) noExecutableNotification(project)
-                else checkExecutableUpdate(version, project)
+                getGolangCiVersion(GoLinterConfig.goLinterExe).ifPresentOrElse(
+                        { checkExecutableUpdate(it, project) },
+                        { noExecutableNotification(project) }
+                )
             }
         } catch (ignore: Throwable) {
             // ignore
@@ -53,8 +54,8 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
             override fun run(pi: ProgressIndicator) {
                 pi.isIndeterminate = true
 
-                val timeout = 3000
                 try {
+                    val timeout = 3000
                     val latestMeta = HttpClientBuilder.create()
                             .disableContentCompression()
                             .setDefaultRequestConfig(RequestConfig.custom()
@@ -64,9 +65,17 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
                             .build()
                             .use { getLatestReleaseMeta(it) }
                     val latestVersion = latestMeta.name.substring(1)
-                    val versionDiff = latestVersion.split('.').zip(curVersion.split('.')).firstOrNull { it.first != it.second } ?: return
-                    if (versionDiff.first.toInt() > versionDiff.second.toInt())
-                        updateNotification(project, latestMeta)
+
+                    if (curVersion.matches(Regex("""\d+\.\d+\.\d+"""))) {
+                        val versionDiff = latestVersion.split('.')
+                                .zip(curVersion.split('.'))
+                                .firstOrNull { it.first != it.second }
+                                ?: return
+                        if (versionDiff.first.toInt() > versionDiff.second.toInt())
+                            updateNotification(project, "golangci-lint update available", latestMeta)
+                    } else {
+                        updateNotification(project, "golangci-lint is custom built: $curVersion", latestMeta)
+                    }
                 } catch (e: Exception) {
                     // ignore
                 }
@@ -74,12 +83,12 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
         })
     }
 
-    private fun updateNotification(project: Project, latestMeta: GithubRelease) {
+    private fun updateNotification(project: Project, title: String, latestMeta: GithubRelease) {
         val platformBinName = getPlatformSpecificBinName(latestMeta)
         val url = latestMeta.assets.single { it.name == platformBinName }.browserDownloadUrl
 
         notificationGroup.createNotification(
-                "golangci-lint update available",
+                title,
                 "Download <a href=\"$url\">${latestMeta.name}</a> in browser",
                 NotificationType.INFORMATION,
                 NotificationListener.URL_OPENING_LISTENER).apply {

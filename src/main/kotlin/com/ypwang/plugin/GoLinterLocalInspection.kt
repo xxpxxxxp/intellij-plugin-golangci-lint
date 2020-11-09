@@ -93,14 +93,19 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
     override fun checkFile(file: PsiFile, manager: InspectionManager, isOnTheFly: Boolean): Array<ProblemDescriptor>? {
         if (file !is GoFile || !File(GoLinterConfig.goLinterExe).canExecute()/* no linter executable */) return null
 
-        val absolutePath = Paths.get(file.virtualFile.path)     // file's absolute path
-        val module = absolutePath.parent.toString()             // file's relative path to running dir
-        val matchName = absolutePath.fileName.toString()        // file name
+        val project = manager.project
+        if (project.basePath == null)
+            return null
+
+        val projectPath = Paths.get(project.basePath!!)
+        val absolutePath = Paths.get(file.virtualFile.path)                     // file's absolute path
+        val sub = projectPath.relativize(absolutePath.parent).toString()        // file's relative path to running dir
+        val matchName = projectPath.relativize(absolutePath).toString()         // file name
 
         run {
             // see if cached
             val issueWithTTL = synchronized(cache) {
-                cache[module]
+                cache[sub]
             }
 
             if (
@@ -115,11 +120,10 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
 
         // cache not found or outdated
         // ====================================================================================================================================
-        val project = manager.project
-        val params = buildParameters(file, project) ?: return null
-        val issues = runAndProcessResult(project, module, params, buildEnvironment(project)) ?: return null
+        val params = buildParameters(file, project, sub) ?: return null
+        val issues = runAndProcessResult(project, params, buildEnvironment(project)) ?: return null
         synchronized(cache) {
-            cache[module] = System.currentTimeMillis() to issues
+            cache[sub] = System.currentTimeMillis() to issues
         }
         return matchAndShow(file, manager, isOnTheFly, issues, matchName)
     }
@@ -155,12 +159,15 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         return saved
     }
 
-    private fun buildParameters(file: PsiFile, project: Project): List<String>? {
+    private fun buildParameters(file: PsiFile, project: Project, sub: String): List<String>? {
         val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json", "--allow-parallel-runners")
         val provides = mutableSetOf<String>()
 
         val conf = customConfigDetected(project)
-        if (!conf.isPresent) {
+        if (conf.isPresent) {
+            parameters.add("-c")
+            parameters.add(conf.get())
+        } else {
             // use default linters
             val enabledLinters = GoLinterConfig.enabledLinters
             if (enabledLinters != null) {
@@ -219,8 +226,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
             provides.addAll(breaks)
         }
 
-        parameters.add(".")
-
+        parameters.add(sub)
         return parameters
     }
 
@@ -322,8 +328,8 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
 
     // return issues (might be empty) if run succeed
     // return null if run failed
-    private fun runAndProcessResult(project: Project, module: String, parameters: List<String>, env: Map<String, String>): List<LintIssue>? {
-        val processResult = execute(module, parameters, env)
+    private fun runAndProcessResult(project: Project, parameters: List<String>, env: Map<String, String>): List<LintIssue>? {
+        val processResult = execute(project.basePath!!, parameters, env)
         when (processResult.returnCode) {
             // 0: no hint found; 1: hint found
             0, 1 -> return GolangCiOutputParser.parseIssues(processResult)
@@ -334,7 +340,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
                 val now = System.currentTimeMillis()
                 // freq cap 1min
                 if (showError && (notificationLastTime.get() + notificationFrequencyCap) < now) {
-                    logger.warn("Debug command: ${ buildCommand(module, parameters, env) }")
+                    logger.warn("Debug command: ${buildCommand(project.basePath!!, parameters, env)}")
 
                     val notification = when {
                         processResult.stderr.contains("analysis skipped: errors in package") || processResult.stderr.contains("typechecking error") ->
@@ -347,7 +353,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
                                     NotificationType.ERROR,
                                     null as NotificationListener?).apply {
                                 // find the config file
-                                findCustomConfigInPath(module).ifPresent {
+                                findCustomConfigInPath(project.basePath!!).ifPresent {
                                     val configFile = File(it)
                                     if (configFile.exists()) {
                                         this.addAction(NotificationAction.createSimple("Open ${configFile.name}") {

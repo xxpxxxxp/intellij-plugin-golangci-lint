@@ -2,10 +2,12 @@ package com.ypwang.plugin
 
 import com.google.common.io.CharStreams
 import com.google.gson.Gson
+import com.google.gson.JsonSyntaxException
 import com.intellij.notification.NotificationGroup
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.util.SystemInfo
 import com.ypwang.plugin.model.GithubRelease
+import com.ypwang.plugin.model.GolangciLintVersion
 import com.ypwang.plugin.model.RunProcessResult
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.http.client.methods.HttpGet
@@ -22,6 +24,7 @@ import java.util.zip.ZipInputStream
 private const val LinterName = "golangci-lint"
 private const val notificationGroupName = "Go linter notifications"
 private val configFiles = arrayOf(".golangci.json", ".golangci.toml", ".golangci.yaml", ".golangci.yml")  // ordered by precedence
+private val cmdQuote = if (SystemInfo.isWindows) '"' else '\''
 
 val logger = Logger.getInstance("go-linter")
 val notificationGroup = NotificationGroup.findRegisteredGroup(notificationGroupName) ?: NotificationGroup.balloonGroup(notificationGroupName)
@@ -203,15 +206,22 @@ fun buildCommand(module: String, parameters: List<String>, envs: Map<String, Str
                 for ((k, v) in envs)                        // set env
                     this.append("export $k=$v && ")
             }
-            this.append(parameters.joinToString(" "))
+            this.append(parameters.joinToString(" "){ "$cmdQuote$it$cmdQuote" })
         }.toString()
 
-fun getGolangCiVersion(path: String): String {
-    if (!File(GoLinterConfig.goLinterExe).canExecute()) return ""
-    val rst = GolangCiOutputParser.runProcess(listOf(path, "version"), null, mapOf())
-    if (rst.returnCode != 0) return ""
-    val regex = Regex("""golangci-lint has version ([\d.]+) built from \w+ on [\w-:]+\n""")
-    return regex.matchEntire(rst.stderr)?.let { it.groups[1]!!.value } ?: ""
+fun getGolangCiVersion(path: String): Optional<String> {
+    if (File(GoLinterConfig.goLinterExe).canExecute()) {
+        val result = GolangCiOutputParser.runProcess(listOf(path, "version", "--format", "json"), null, mapOf())
+        if (result.returnCode == 0) {
+            try {
+                return Optional.of(Gson().fromJson(result.stderr, GolangciLintVersion::class.java).version)
+            } catch (e: JsonSyntaxException) {
+                // ignore
+            }
+        }
+    }
+
+    return Optional.empty()
 }
 
 private val OS: String by lazy {
