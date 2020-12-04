@@ -29,6 +29,12 @@ Click `OK`, you are all set!
 
 Please keep in mind that **golangci-lint** is a linter tool, **it only works if your project could build (no syntax error)**, or it will report no issue.
 
+### Go Project As Sub Folder
+If you are using Intellij, and Go project is not the root project (sub-folder of the root project, eg: nested in a Java project),  
+If the Go project has its own golangci-lint config file,  
+Please select project root to the Go project, in order to make the plugin pick up correct config file:
+
+
 ### For Windows users
 Please disable goimports / gofmt / gci linters. Use [File-Watcher](https://tech.flyclops.com/posts/2016-06-14-goimports-intellij.html) in IDEA.  
 *It you insist using those 3 linters, download <a href="http://ftp.gnu.org/gnu/diffutils/">GNU diff</a> & <a href="https://ftp.gnu.org/pub/gnu/libiconv/">GNU LibIconv</a> and put them in system PATH (eg: C:\WINDOWS). Normally it's missing from the system.*

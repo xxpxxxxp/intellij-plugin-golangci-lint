@@ -72,11 +72,11 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
     // cache config search to save time
     private var customConfig: Optional<String> = Optional.empty()
     private var customConfigLastCheckTime = AtomicLong(-1)
-    private fun customConfigDetected(project: Project): Optional<String> =
+    private fun customConfigDetected(path: String): Optional<String> =
             // cache the result max 10s
             System.currentTimeMillis().let {
-                if (customConfigLastCheckTime.get() + 60000 < it) {
-                    customConfig = findCustomConfigInPath(project.basePath)
+                if (customConfigLastCheckTime.get() + 60000 < it || customConfigLastCheckTime.get() < GoLinterSettings.getLastSavedTime()) {
+                    customConfig = findCustomConfigInPath(path)
                     customConfigLastCheckTime.set(it)
                 }
 
@@ -94,11 +94,14 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         if (file !is GoFile || !File(GoLinterConfig.goLinterExe).canExecute()/* no linter executable */) return null
 
         val project = manager.project
-        if (project.basePath == null)
+        // fallback to project base path
+        val projectPath = Paths.get(GoLinterConfig.customProjectDir.orElse(project.basePath!!))
+        val absolutePath = Paths.get(file.virtualFile.path)                     // file's absolute path
+
+        if (!absolutePath.startsWith(projectPath))
+            // file is not in current Go project, skip
             return null
 
-        val projectPath = Paths.get(project.basePath!!)
-        val absolutePath = Paths.get(file.virtualFile.path)                     // file's absolute path
         val sub = projectPath.relativize(absolutePath.parent).toString()        // file's relative path to running dir
         val matchName = projectPath.relativize(absolutePath).toString()         // file name
 
@@ -120,12 +123,17 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
 
         // cache not found or outdated
         // ====================================================================================================================================
-        val params = buildParameters(file, project, sub) ?: return null
-        val issues = runAndProcessResult(project, params, buildEnvironment(project)) ?: return null
-        synchronized(cache) {
-            cache[sub] = System.currentTimeMillis() to issues
+        return try {
+            val params = buildParameters(file, project, sub)
+            val issues = runAndProcessResult(project, params, buildEnvironment(project))
+            synchronized(cache) {
+                cache[sub] = System.currentTimeMillis() to issues
+            }
+
+            matchAndShow(file, manager, isOnTheFly, issues, matchName)
+        } catch (e: Exception) {
+            null
         }
-        return matchAndShow(file, manager, isOnTheFly, issues, matchName)
     }
 
     private fun isSaved(file: PsiFile): Boolean {
@@ -159,71 +167,52 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         return saved
     }
 
-    private fun buildParameters(file: PsiFile, project: Project, sub: String): List<String>? {
-        val parameters = mutableListOf(GoLinterConfig.goLinterExe, "run", "--out-format", "json", "--allow-parallel-runners")
-        val provides = mutableSetOf<String>()
+    private fun buildParameters(file: PsiFile, project: Project, sub: String): List<String> {
+        val parameters = mutableListOf(
+                GoLinterConfig.goLinterExe,
+                "run", "--out-format", "json", "--allow-parallel-runners",
+                // don't use to much CPU. Runtime should have at least 1 available processor, right?
+                "-j", ((Runtime.getRuntime().availableProcessors() + 3) / 4).toString(),
+                // no issue limit
+                "--max-issues-per-linter", "0", "--max-same-issues", "0",
+                // TODO: this flag is deprecating, while currently there's no better way
+                "--maligned.suggest-new"
+        )
 
-        val conf = customConfigDetected(project)
-        if (conf.isPresent) {
-            parameters.add("-c")
-            parameters.add(conf.get())
-        } else {
-            // use default linters
-            val enabledLinters = GoLinterConfig.enabledLinters
-            if (enabledLinters != null) {
-                // no linter is selected, skip run
-                if (enabledLinters.isEmpty())
-                    return null
+        customConfigDetected(GoLinterConfig.customProjectDir.orElse(project.basePath!!)).ifPresentOrElse(
+                {
+                    parameters.add("-c")
+                    parameters.add(it)
+                },
+                {
+                    // use default linters
+                    val enabledLinters = GoLinterConfig.enabledLinters
+                    if (enabledLinters != null) {
+                        // no linter is selected, skip run
+                        if (enabledLinters.isEmpty())
+                            throw Exception("all linters disabled")
 
-                parameters.add("--disable-all")
-                parameters.add("-E")
-                parameters.add(enabledLinters.joinToString(","))
-            }
-        }
-
-        if (!provides.contains("--build-tags")) {
-            val module = ModuleUtilCore.findModuleForFile(file)
-            if (module != null) {
-                val buildTagsSettings = GoModuleSettings.getInstance(module).buildTargetSettings
-                val default = "default"
-                val buildTags = mutableListOf<String>().apply {
-                    if (buildTagsSettings.arch != default) this.add(buildTagsSettings.arch)
-                    if (buildTagsSettings.os != default) this.add(buildTagsSettings.os)
-                    this.addAll(buildTagsSettings.customFlags)
+                        parameters.add("--disable-all")
+                        parameters.add("-E")
+                        parameters.add(enabledLinters.joinToString(","))
+                    }
                 }
+        )
 
-                if (buildTags.isNotEmpty()) {
-                    parameters.add("--build-tags")
-                    parameters.add(buildTags.joinToString(","))
-                }
+        val module = ModuleUtilCore.findModuleForFile(file)
+        if (module != null) {
+            val buildTagsSettings = GoModuleSettings.getInstance(module).buildTargetSettings
+            val default = "default"
+            val buildTags = mutableListOf<String>().apply {
+                if (buildTagsSettings.arch != default) this.add(buildTagsSettings.arch)
+                if (buildTagsSettings.os != default) this.add(buildTagsSettings.os)
+                this.addAll(buildTagsSettings.customFlags)
             }
-        }
 
-        // don't use to much CPU
-        if (!provides.contains("-j")) {
-            parameters.add("-j")
-            // runtime should have at least 1 available processor, right?
-            parameters.add(((Runtime.getRuntime().availableProcessors() + 3) / 4).toString())
-        }
-
-        if (!provides.contains("--max-issues-per-linter")) {
-            parameters.add("--max-issues-per-linter")
-            parameters.add("0")
-        }
-
-        if (!provides.contains("--max-same-issues")) {
-            parameters.add("--max-same-issues")
-            parameters.add("0")
-        }
-
-        // TODO: this flag is deprecating, while currently there's no better way
-        if (!provides.contains("--maligned.suggest-new"))
-            parameters.add("--maligned.suggest-new")
-
-        if (GoLinterConfig.useCustomOptions && GoLinterConfig.customOptions.isNotEmpty()) {
-            val breaks = GoLinterConfig.customOptions.split(" ")
-            parameters.addAll(breaks)
-            provides.addAll(breaks)
+            if (buildTags.isNotEmpty()) {
+                parameters.add("--build-tags")
+                parameters.add(buildTags.joinToString(","))
+            }
         }
 
         parameters.add(sub)
@@ -328,7 +317,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
 
     // return issues (might be empty) if run succeed
     // return null if run failed
-    private fun runAndProcessResult(project: Project, parameters: List<String>, env: Map<String, String>): List<LintIssue>? {
+    private fun runAndProcessResult(project: Project, parameters: List<String>, env: Map<String, String>): List<LintIssue> {
         val processResult = execute(project.basePath!!, parameters, env)
         when (processResult.returnCode) {
             // 0: no hint found; 1: hint found
@@ -343,9 +332,9 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
                     logger.warn("Debug command: ${buildCommand(project.basePath!!, parameters, env)}")
 
                     val notification = when {
+                        // syntax error or package not found, fix that first
                         processResult.stderr.contains("analysis skipped: errors in package") || processResult.stderr.contains("typechecking error") ->
-                            // syntax error or package not found, programmer should fix that first
-                            return null
+                            throw Exception("syntax error")
                         processResult.stderr.contains("Can't read config") ->
                             notificationGroup.createNotification(
                                     ErrorTitle,
@@ -417,11 +406,11 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
                     notification.notify(project)
                     notificationLastTime.set(now)
                 }
+
+                // or skip current run
+                throw Exception("run failed")
             }
         }
-
-        // or skip current run
-        return null
     }
 
     private fun matchAndShow(file: PsiFile, manager: InspectionManager, isOnTheFly: Boolean, issues: List<LintIssue>, matchName: String): Array<ProblemDescriptor>? {

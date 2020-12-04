@@ -8,15 +8,15 @@
     <properties/>
     <border type="none"/>
     <children>
-      <component id="f4eff" class="javax.swing.JButton" binding="fetchLatestReleaseButton" custom-create="true" default-binding="true">
+      <component id="f4eff" class="javax.swing.JButton" binding="fetchLatestReleaseButton" default-binding="true">
         <constraints>
-          <grid row="0" column="3" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="4" fill="0" indent="0" use-parent-layout="false"/>
+          <grid row="0" column="3" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="0" fill="0" indent="0" use-parent-layout="false"/>
         </constraints>
         <properties>
           <text value="Get Latest"/>
         </properties>
       </component>
-      <component id="b989e" class="javax.swing.JComboBox" binding="linterChooseComboBox" custom-create="true">
+      <component id="b989e" class="javax.swing.JComboBox" binding="linterChooseComboBox">
         <constraints>
           <grid row="0" column="1" row-span="1" col-span="1" vsize-policy="0" hsize-policy="6" anchor="8" fill="1" indent="0" use-parent-layout="false"/>
         </constraints>
@@ -38,22 +38,6 @@
           <text value="Open..."/>
         </properties>
       </component>
-      <component id="25a8b" class="javax.swing.JCheckBox" binding="useCustomOptionsCheckBox" custom-create="true" default-binding="true">
-        <constraints>
-          <grid row="1" column="0" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="8" fill="0" indent="0" use-parent-layout="false"/>
-        </constraints>
-        <properties>
-          <text value="Custom Options"/>
-        </properties>
-      </component>
-      <component id="72705" class="com.ypwang.plugin.form.HintTextField" binding="customOptionsField" custom-create="true">
-        <constraints>
-          <grid row="1" column="1" row-span="1" col-span="3" vsize-policy="0" hsize-policy="6" anchor="8" fill="1" indent="0" use-parent-layout="false">
-            <preferred-size width="150" height="-1"/>
-          </grid>
-        </constraints>
-        <properties/>
-      </component>
       <grid id="979a6" binding="linterSelectPanel" custom-create="true" layout-manager="CardLayout" hgap="0" vgap="0">
         <constraints>
           <grid row="3" column="0" row-span="1" col-span="4" vsize-policy="3" hsize-policy="3" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
@@ -62,17 +46,36 @@
         <border type="none"/>
         <children/>
       </grid>
-      <component id="2c85d" class="javax.swing.JComponent" binding="multiLabel" custom-create="true">
-        <constraints>
-          <grid row="2" column="0" row-span="1" col-span="3" vsize-policy="0" hsize-policy="3" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
-        </constraints>
-      </component>
       <component id="3bbd0" class="javax.swing.JLabel" binding="helpDocumentLabel" custom-create="true">
         <constraints>
           <grid row="2" column="3" row-span="1" col-span="1" vsize-policy="0" hsize-policy="0" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
         </constraints>
         <properties>
           <text value="Document..."/>
+        </properties>
+      </component>
+      <component id="bb265" class="javax.swing.JButton" binding="customProjectSelectButton">
+        <constraints>
+          <grid row="1" column="3" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
+        </constraints>
+        <properties>
+          <text value="Select..."/>
+        </properties>
+      </component>
+      <component id="e5e20" class="javax.swing.JLabel" binding="projectDir">
+        <constraints>
+          <grid row="1" column="1" row-span="1" col-span="2" vsize-policy="0" hsize-policy="0" anchor="8" fill="0" indent="0" use-parent-layout="false"/>
+        </constraints>
+        <properties>
+          <text value=""/>
+        </properties>
+      </component>
+      <component id="69bfe" class="javax.swing.JLabel" binding="projectRootLabel" custom-create="true">
+        <constraints>
+          <grid row="1" column="0" row-span="1" col-span="1" vsize-policy="0" hsize-policy="0" anchor="8" fill="0" indent="0" use-parent-layout="false"/>
+        </constraints>
+        <properties>
+          <text value="Project Root:"/>
         </properties>
       </component>
     </children>
