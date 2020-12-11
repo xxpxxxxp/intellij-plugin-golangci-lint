@@ -30,9 +30,10 @@ Click `OK`, you are all set!
 Please keep in mind that **golangci-lint** is a linter tool, **it only works if your project could build (no syntax error)**, or it will report no issue.
 
 ### Go Project As Sub Folder
-If you are using Intellij, and Go project is not the root project (sub-folder of the root project, eg: nested in a Java project),  
-If the Go project has its own golangci-lint config file,  
-Please select project root to the Go project, in order to make the plugin pick up correct config file:
+**Skip this if you are not using config file (eg: `.golangci.yml`)**  
+If you are using Intellij, the Go project is not the root project (sub-folder nested in the root project),  
+and the Go project has its own golangci-lint config file,  
+Please select `project root` to the path of Go project, in order to let the plugin correctly pick up the config file.
 
 
 ### For Windows users
