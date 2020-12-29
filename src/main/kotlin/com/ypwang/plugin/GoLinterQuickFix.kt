@@ -26,6 +26,8 @@ val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "gofumpt" to GoFumptHandler,
         "exportloopref" to ExportLoopRefHandler,
         "noctx" to NoCtxRefHandler,
+        "makezero" to MarkZeroHandler,
+        "thelper" to TestHelperHandler,
         "nlreturn" to NlReturnHandler,
         "errorlint" to ErrorLintHandler
 ).apply {

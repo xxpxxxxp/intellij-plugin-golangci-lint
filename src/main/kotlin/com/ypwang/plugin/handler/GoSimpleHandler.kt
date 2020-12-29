@@ -79,6 +79,10 @@ object GoSimpleHandler : ProblemHandler() {
                         }
                         else NonAvailableFix
                     }
+                // should replace loop with `...`"
+                "S1011" -> chainFindAndHandle(file, document, issue, overrideLine) { element: GoForStatement ->
+                    return arrayOf<LocalQuickFix>(GoReplaceElementFix(extractQuote(issue.Text).single(), element, GoAssignmentStatement::class.java)) to element.`for`.textRange
+                }
                 // should use `time.Since` instead of `time.Now().Sub`
                 "S1012" -> chainFindAndHandle(file, document, issue, overrideLine) { element: GoReferenceExpression ->
                     if (element.parent is GoReferenceExpression &&

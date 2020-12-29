@@ -162,6 +162,16 @@ object NoCtxRefHandler : ProblemHandler() {
             arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/sonatard/noctx/blob/master/README.md")) to null
 }
 
+object MarkZeroHandler : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+        arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/ashanbrown/makezero#purpose")) to null
+}
+
+object TestHelperHandler : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+        arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/kulti/thelper#why")) to null
+}
+
 // just fit range
 object DuplHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> {
