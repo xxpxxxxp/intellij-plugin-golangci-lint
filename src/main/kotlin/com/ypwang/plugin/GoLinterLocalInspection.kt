@@ -1,11 +1,8 @@
 package com.ypwang.plugin
 
 import com.goide.configuration.GoSdkConfigurable
-import com.goide.project.GoApplicationLibrariesService
 import com.goide.project.GoModuleSettings
-import com.goide.project.GoProjectLibrariesService
 import com.goide.psi.GoFile
-import com.goide.sdk.GoSdkService
 import com.intellij.codeInspection.InspectionManager
 import com.intellij.codeInspection.LocalInspectionTool
 import com.intellij.codeInspection.ProblemDescriptor
@@ -22,7 +19,6 @@ import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 import com.jetbrains.rd.util.first
@@ -60,9 +56,6 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         private val executionLock = AtomicBoolean(false)
         private val workloadsLock = ReentrantLock()
         private val workLoads = LinkedHashMap<String, GoLinterWorkLoad>()
-
-        private val systemPath = System.getenv("PATH")
-        private val systemGoPath = System.getenv("GOPATH")      // immutable in current idea process
     }
 
     // reduce error show freq
@@ -125,7 +118,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         // ====================================================================================================================================
         return try {
             val params = buildParameters(file, project, sub)
-            val issues = runAndProcessResult(project, params, buildEnvironment(project))
+            val issues = runAndProcessResult(project, params, mapOf("PATH" to getSystemPath(project), "GOPATH" to getGoPath(project)))
             synchronized(cache) {
                 cache[sub] = System.currentTimeMillis() to issues
             }
@@ -217,32 +210,6 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
 
         parameters.add(sub)
         return parameters
-    }
-
-    private fun buildEnvironment(project: Project): Map<String, String> {
-        // try best to get GOPATH, as GoLand or Intellij's go plugin have to know the correct 'GOPATH' for inspections,
-        // full GOPATH should be: IDE project GOPATH + Global GOPATH
-        val goPluginSettings = GoProjectLibrariesService.getInstance(project)
-        val goPaths = goPluginSettings.libraryRootUrls.map { Paths.get(VirtualFileManager.extractPath(it)).toString() }.toMutableList().apply {
-            if (goPluginSettings.isUseGoPathFromSystemEnvironment) {
-                this.addAll(GoApplicationLibrariesService.getInstance().libraryRootUrls.map { Paths.get(VirtualFileManager.extractPath(it)).toString() })
-                if (systemGoPath != null)
-                    this.add(systemGoPath)
-            }
-        }.joinToString(File.pathSeparator)
-
-        var envPath = systemPath
-        val goExecutable = GoSdkService.getInstance(project).getSdk(null).goExecutablePath
-        if (goExecutable != null) {
-            // for Mac users: OSX is using different PATH for terminal & GUI, Intellij seems cannot inherit '/usr/local/bin' as PATH
-            // that cause problem because golangci-lint depends on `go env` to discover GOPATH (I don't know why they do this)
-            // add Go plugin's SDK path to PATH if needed in order to make golangci-lint happy
-            val goBin = Paths.get(goExecutable).parent.toString()
-            if (!envPath.contains(goBin))
-                envPath = "$goBin${File.pathSeparator}$envPath"
-        }
-
-        return mapOf("PATH" to envPath, "GOPATH" to goPaths)
     }
 
     // executionLock must be hold during the whole time of execution

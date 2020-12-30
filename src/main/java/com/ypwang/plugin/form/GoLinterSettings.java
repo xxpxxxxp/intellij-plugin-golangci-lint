@@ -260,9 +260,19 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
             enabledLinters.clear();
 
             if (selectedLinter != null && new File(selectedLinter).canExecute()) {
-                allLinters.addAll(GolangCiOutputParser.INSTANCE.parseLinters(
-                        GolangCiOutputParser.INSTANCE.runProcess(Arrays.asList(selectedLinter, "linters"), StringUtils.isNotEmpty(projectDir.getText()) ? projectDir.getText() : null, new HashMap<>())
-                ));
+                try {
+                    allLinters.addAll(GolangCiOutputParser.INSTANCE.parseLinters(GolangCiOutputParser.INSTANCE.runProcess(
+                            Arrays.asList(selectedLinter, "linters"),
+                            StringUtils.isNotEmpty(projectDir.getText()) ? projectDir.getText() : null,
+                            Collections.singletonMap("PATH", UtilitiesKt.getSystemPath(curProject))
+                    )));
+                } catch (Exception e) {
+                    UtilitiesKt.getLogger().error(e);
+                    ApplicationManager.getApplication().invokeLater(
+                            () -> showErrorBox("Failed to Discover Linters", "Invalid 'GOROOT' in IDE"),
+                            ModalityState.any()
+                    );
+                }
 
                 String[] enabledLintersInConfig = GoLinterConfig.INSTANCE.getEnabledLinters();
                 if (enabledLintersInConfig != null && linterTable.isEnabled()) {
@@ -452,17 +462,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         } catch (ProcessCanceledException ex) {
             UtilitiesKt.getLogger().info("get latest golangci-lint cancelled");
         } catch (Exception ex) {
-            JLabel messageLabel = new JBLabel(ex.getMessage(),
-                    new ImageIcon(new ImageIcon(this.getClass().getResource("/images/mole.png")).getImage().getScaledInstance(60, 60, Image.SCALE_SMOOTH)),
-                    SwingConstants.CENTER);
-            messageLabel.setBorder(JBUI.Borders.empty(10));
-            messageLabel.setIconTextGap(20);
-            DialogBuilder builder = new DialogBuilder(settingPanel).title("Failed to Get Latest Release").centerPanel(messageLabel).resizable(false);
-            builder.removeAllActions();
-            builder.addOkAction();
-            builder.show();
-            builder.dispose();
-            UIUtil.dispose(messageLabel);
+            showErrorBox("Failed to Get Latest Release", ex.getMessage());
         }
     }
 
@@ -496,5 +496,20 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
             modified = true;
         }
+    }
+
+    private void showErrorBox(String title, String message) {
+        JLabel messageLabel = new JBLabel(
+                message,
+                new ImageIcon(new ImageIcon(this.getClass().getResource("/images/mole.png")).getImage().getScaledInstance(60, 60, Image.SCALE_SMOOTH)),
+                SwingConstants.CENTER);
+        messageLabel.setBorder(JBUI.Borders.empty(10));
+        messageLabel.setIconTextGap(20);
+        DialogBuilder builder = new DialogBuilder(settingPanel).title(title).centerPanel(messageLabel).resizable(false);
+        builder.removeAllActions();
+        builder.addOkAction();
+        builder.show();
+        builder.dispose();
+        UIUtil.dispose(messageLabel);
     }
 }

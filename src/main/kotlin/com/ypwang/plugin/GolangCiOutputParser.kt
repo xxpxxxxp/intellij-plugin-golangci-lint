@@ -29,43 +29,38 @@ object GolangCiOutputParser {
     }
 
     fun parseLinters(result: RunProcessResult): List<GoLinter> {
+        if (result.returnCode != 0)
+            throw Exception("Failed to Discover Linters: $result")
+
         val linters = mutableListOf<GoLinter>()
-        try {
-            if (result.returnCode != 0)
-                throw Exception("Execution failed")
-
-            val linterRaw = result.stdout.lines()
-            // format: name[ (aka)]: description [fast: bool, auto-fix: bool]
-            val regex = Regex("""(?<name>\w+)( \((?<aka>[\w, ]+)\))?: (?<description>.+) \[fast: (?<fast>true|false), auto-fix: (?<autofix>true|false)]""")
-            // parse output
-            var enabled = true
-            for (line in linterRaw) {
-                if (line.isEmpty()) continue
-                if (line.startsWith("Enabled")) {
-                    enabled = true
-                    continue
-                }
-                if (line.startsWith("Disabled")) {
-                    enabled = false
-                    continue
-                }
-
-                // use regex is a bit slow
-                regex.matchEntire(line)?.let {
-                    linters.add(
-                            GoLinter(
-                                    enabled,
-                                    it.groups["name"]!!.value,
-                                    it.groups["aka"]?.value ?: "",
-                                    it.groups["description"]!!.value,
-                                    it.groups["fast"]!!.value.toBoolean(),
-                                    it.groups["autofix"]!!.value.toBoolean())
-                    )
-                }
+        val linterRaw = result.stdout.lines()
+        // format: name[ (aka)]: description [fast: bool, auto-fix: bool]
+        val regex = Regex("""(?<name>\w+)( \((?<aka>[\w, ]+)\))?: (?<description>.+) \[fast: (?<fast>true|false), auto-fix: (?<autofix>true|false)]""")
+        // parse output
+        var enabled = true
+        for (line in linterRaw) {
+            if (line.isEmpty()) continue
+            if (line.startsWith("Enabled")) {
+                enabled = true
+                continue
+            }
+            if (line.startsWith("Disabled")) {
+                enabled = false
+                continue
             }
 
-        } catch (e: Exception) {
-            logger.error("Cannot get linters from running result: $result")
+            // use regex is a bit slow
+            regex.matchEntire(line)?.let {
+                linters.add(
+                    GoLinter(
+                        enabled,
+                        it.groups["name"]!!.value,
+                        it.groups["aka"]?.value ?: "",
+                        it.groups["description"]!!.value,
+                        it.groups["fast"]!!.value.toBoolean(),
+                        it.groups["autofix"]!!.value.toBoolean())
+                )
+            }
         }
 
         return linters

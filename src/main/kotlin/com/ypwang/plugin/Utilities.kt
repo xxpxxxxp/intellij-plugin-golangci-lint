@@ -1,11 +1,16 @@
 package com.ypwang.plugin
 
+import com.goide.project.GoApplicationLibrariesService
+import com.goide.project.GoProjectLibrariesService
+import com.goide.sdk.GoSdkService
 import com.google.common.io.CharStreams
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
 import com.intellij.notification.NotificationGroup
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.openapi.vfs.VirtualFileManager
 import com.ypwang.plugin.model.GithubRelease
 import com.ypwang.plugin.model.GolangciLintVersion
 import com.ypwang.plugin.model.RunProcessResult
@@ -25,11 +30,41 @@ private const val LinterName = "golangci-lint"
 private const val notificationGroupName = "Go linter notifications"
 private val configFiles = arrayOf(".golangci.json", ".golangci.toml", ".golangci.yaml", ".golangci.yml")  // ordered by precedence
 private val cmdQuote = if (SystemInfo.isWindows) '"' else '\''
+private val systemPath = System.getenv("PATH")
+private val systemGoPath = System.getenv("GOPATH")      // immutable in current idea process
 
 val logger = Logger.getInstance("go-linter")
 val notificationGroup = NotificationGroup.findRegisteredGroup(notificationGroupName) ?: NotificationGroup.balloonGroup(notificationGroupName)
 val linterExecutableName = if (SystemInfo.isWindows) "$LinterName.exe" else LinterName
 val executionDir: String = if (SystemInfo.isWindows) System.getenv("PUBLIC") else "/usr/local/bin"
+
+fun getSystemPath(project: Project): String {
+    var envPath = systemPath
+    val goExecutable = GoSdkService.getInstance(project).getSdk(null).goExecutablePath
+    if (goExecutable != null) {
+        // for Mac users: OSX is using different PATH for terminal & GUI, Intellij seems cannot inherit '/usr/local/bin' as PATH
+        // that cause problem because golangci-lint depends on `go env` to discover GOPATH (I don't know why they do this)
+        // add Go plugin's SDK path to PATH if needed in order to make golangci-lint happy
+        val goBin = Paths.get(goExecutable).parent.toString()
+        if (!envPath.contains(goBin))
+            envPath = "$goBin${File.pathSeparator}$envPath"
+    }
+
+    return envPath
+}
+
+fun getGoPath(project: Project): String {
+    // try best to get GOPATH, as GoLand or Intellij's go plugin have to know the correct 'GOPATH' for inspections,
+    // full GOPATH should be: IDE project GOPATH + Global GOPATH
+    val goPluginSettings = GoProjectLibrariesService.getInstance(project)
+    return goPluginSettings.libraryRootUrls.map { Paths.get(VirtualFileManager.extractPath(it)).toString() }.toMutableList().apply {
+        if (goPluginSettings.isUseGoPathFromSystemEnvironment) {
+            this.addAll(GoApplicationLibrariesService.getInstance().libraryRootUrls.map { Paths.get(VirtualFileManager.extractPath(it)).toString() })
+            if (systemGoPath != null)
+                this.add(systemGoPath)
+        }
+    }.joinToString(File.pathSeparator)
+}
 
 fun findCustomConfigInPath(path: String?): Optional<String> {
     val varPath: String? = path
