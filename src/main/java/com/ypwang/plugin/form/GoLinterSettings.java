@@ -1,11 +1,13 @@
 package com.ypwang.plugin.form;
 
+import com.goide.configuration.GoSdkConfigurable;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.openapi.options.SearchableConfigurable;
+import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
@@ -42,8 +44,14 @@ import java.io.File;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
-import java.util.*;
+import java.util.Optional;
+import java.util.Set;
+import java.util.Vector;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -269,8 +277,11 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                 } catch (Exception e) {
                     UtilitiesKt.getLogger().error(e);
                     ApplicationManager.getApplication().invokeLater(
-                            () -> showErrorBox("Failed to Discover Linters", "Invalid 'GOROOT' in IDE"),
-                            ModalityState.any()
+                            () -> {
+                                showErrorBox("Failed to Discover Linters", "'GOROOT' not set. Please re-select executable after set 'GOROOT'.");
+                                ShowSettingsUtil.getInstance().editConfigurable(curProject, new GoSdkConfigurable(curProject, true));
+                            },
+                            ModalityState.stateForComponent(settingPanel)
                     );
                 }
 

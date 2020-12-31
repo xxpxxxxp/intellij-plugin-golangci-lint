@@ -39,18 +39,21 @@ val linterExecutableName = if (SystemInfo.isWindows) "$LinterName.exe" else Lint
 val executionDir: String = if (SystemInfo.isWindows) System.getenv("PUBLIC") else "/usr/local/bin"
 
 fun getSystemPath(project: Project): String {
-    var envPath = systemPath
     val goExecutable = GoSdkService.getInstance(project).getSdk(null).goExecutablePath
     if (goExecutable != null) {
         // for Mac users: OSX is using different PATH for terminal & GUI, Intellij seems cannot inherit '/usr/local/bin' as PATH
         // that cause problem because golangci-lint depends on `go env` to discover GOPATH (I don't know why they do this)
         // add Go plugin's SDK path to PATH if needed in order to make golangci-lint happy
         val goBin = Paths.get(goExecutable).parent.toString()
-        if (!envPath.contains(goBin))
-            envPath = "$goBin${File.pathSeparator}$envPath"
+        val paths = systemPath.split(File.pathSeparator)
+        if (!paths.contains(goBin)) {
+            return paths.toMutableList().apply {
+                this.add(goBin)
+            }.joinToString(File.pathSeparator)
+        }
     }
 
-    return envPath
+    return systemPath
 }
 
 fun getGoPath(project: Project): String {
