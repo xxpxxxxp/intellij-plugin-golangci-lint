@@ -247,9 +247,13 @@ fun buildCommand(module: String, parameters: List<String>, envs: Map<String, Str
             this.append(parameters.joinToString(" "){ "$cmdQuote$it$cmdQuote" })
         }.toString()
 
-fun getGolangCiVersion(path: String): Optional<String> {
+fun getGolangCiVersion(path: String, project: Project): Optional<String> {
     if (File(GoLinterConfig.goLinterExe).canExecute()) {
-        val result = GolangCiOutputParser.runProcess(listOf(path, "version", "--format", "json"), null, mapOf())
+        val result = GolangCiOutputParser.runProcess(
+            listOf(path, "version", "--format", "json"),
+            null,
+            mapOf("PATH" to getSystemPath(project))
+        )
         if (result.returnCode == 0) {
             try {
                 return Optional.of(Gson().fromJson(result.stderr, GolangciLintVersion::class.java).version)

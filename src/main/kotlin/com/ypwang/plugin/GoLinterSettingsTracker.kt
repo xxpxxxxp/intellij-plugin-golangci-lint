@@ -21,7 +21,7 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
         try {
             if (GoLinterConfig.checkGoLinterExe) {
                 // check if golangci-lint is set
-                getGolangCiVersion(GoLinterConfig.goLinterExe).ifPresentOrElse(
+                getGolangCiVersion(GoLinterConfig.goLinterExe, project).ifPresentOrElse(
                         { checkExecutableUpdate(it, project) },
                         { noExecutableNotification(project) }
                 )
