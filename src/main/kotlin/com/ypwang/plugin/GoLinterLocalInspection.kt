@@ -37,6 +37,8 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.collections.LinkedHashMap
 import kotlin.concurrent.withLock
 
+data class Tuple4<T1, T2, T3, T4>(val t1: T1, val t2: T2, val t3: T3, val t4: T4)
+
 private class GoLinterWorkLoad {
     val executionMutex = ReentrantLock()
     val executionCondition: Condition = executionMutex.newCondition()
@@ -87,21 +89,39 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         if (file !is GoFile || !File(GoLinterConfig.goLinterExe).canExecute()/* no linter executable */) return null
 
         val project = manager.project
-        // fallback to project base path
-        val projectPath = Paths.get(GoLinterConfig.customProjectDir.orElse(project.basePath!!))
-        val absolutePath = Paths.get(file.virtualFile.path)                     // file's absolute path
+        val absolutePath = Paths.get(file.virtualFile.path)     // file's absolute path
+        val (runningPath, relativePath, cachePath, matchName) =
+            if (GoLinterConfig.enableCustomProjectDir) {
+                // fallback to project base path
+                val projectPath = Paths.get(GoLinterConfig.customProjectDir.orElse(project.basePath!!))
 
-        if (!absolutePath.startsWith(projectPath))
-            // file is not in current Go project, skip
-            return null
+                if (!absolutePath.startsWith(projectPath))
+                    // file is not in current Go project, skip
+                    return null
 
-        val sub = projectPath.relativize(absolutePath.parent).toString()        // file's relative path to running dir
-        val matchName = projectPath.relativize(absolutePath).toString()         // file name
+                val relative = projectPath.relativize(absolutePath.parent).toString()        // file's relative path to running dir
+                val fileName = projectPath.relativize(absolutePath).toString()               // file name
+                Tuple4(
+                    projectPath.toString(),
+                    relative,
+                    relative,
+                    fileName
+                )
+            } else {
+                val module = absolutePath.parent.toString()             // file's dir
+                val fileName = absolutePath.fileName.toString()         // file name
+                Tuple4(
+                    module,
+                    ".",
+                    module,
+                    fileName
+                )
+            }
 
         run {
             // see if cached
             val issueWithTTL = synchronized(cache) {
-                cache[sub]
+                cache[cachePath]
             }
 
             if (
@@ -117,10 +137,10 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         // cache not found or outdated
         // ====================================================================================================================================
         return try {
-            val params = buildParameters(file, project, sub)
-            val issues = runAndProcessResult(project, params, mapOf("PATH" to getSystemPath(project), "GOPATH" to getGoPath(project)))
+            val params = buildParameters(file, project, relativePath)
+            val issues = runAndProcessResult(project, runningPath, params, mapOf("PATH" to getSystemPath(project), "GOPATH" to getGoPath(project)))
             synchronized(cache) {
-                cache[sub] = System.currentTimeMillis() to issues
+                cache[cachePath] = System.currentTimeMillis() to issues
             }
 
             matchAndShow(file, manager, isOnTheFly, issues, matchName)
@@ -284,8 +304,8 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
 
     // return issues (might be empty) if run succeed
     // return null if run failed
-    private fun runAndProcessResult(project: Project, parameters: List<String>, env: Map<String, String>): List<LintIssue> {
-        val processResult = execute(project.basePath!!, parameters, env)
+    private fun runAndProcessResult(project: Project, runningPath: String, parameters: List<String>, env: Map<String, String>): List<LintIssue> {
+        val processResult = execute(runningPath, parameters, env)
         when (processResult.returnCode) {
             // 0: no hint found; 1: hint found
             0, 1 -> return GolangCiOutputParser.parseIssues(processResult)

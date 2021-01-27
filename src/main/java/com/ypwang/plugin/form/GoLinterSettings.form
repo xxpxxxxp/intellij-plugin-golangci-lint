@@ -59,6 +59,7 @@
           <grid row="1" column="3" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
         </constraints>
         <properties>
+          <enabled value="false"/>
           <text value="Select..."/>
         </properties>
       </component>
@@ -67,15 +68,17 @@
           <grid row="1" column="1" row-span="1" col-span="2" vsize-policy="0" hsize-policy="0" anchor="8" fill="0" indent="0" use-parent-layout="false"/>
         </constraints>
         <properties>
+          <enabled value="false"/>
           <text value=""/>
         </properties>
       </component>
-      <component id="69bfe" class="javax.swing.JLabel" binding="projectRootLabel" custom-create="true">
+      <component id="b6b46" class="javax.swing.JCheckBox" binding="projectRootCheckBox" default-binding="true">
         <constraints>
           <grid row="1" column="0" row-span="1" col-span="1" vsize-policy="0" hsize-policy="0" anchor="8" fill="0" indent="0" use-parent-layout="false"/>
         </constraints>
         <properties>
           <text value="Project Root:"/>
+          <toolTipText value="&lt;html&gt;&#10;&lt;span&gt;Select to &lt;b&gt;sub-project folder&lt;/b&gt; if your Go project is nested &lt;b&gt;(eg: in a Java project)&lt;/b&gt;&lt;/span&gt;&#10;&lt;br/&gt;&#10;&lt;span&gt;Disable if you have multiple Go sub-projects&lt;/span&gt;&#10;&lt;br/&gt;&#10;&lt;span&gt;More info please visit &lt;a href=&quot;https://github.com/xxpxxxxp/intellij-plugin-golangci-lint&quot;&gt;plugin homepage&lt;/a&gt;&lt;/span&gt;&#10;&lt;/html&gt;" noi18n="true"/>
         </properties>
       </component>
     </children>

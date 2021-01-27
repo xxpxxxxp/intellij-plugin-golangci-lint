@@ -207,6 +207,21 @@ object GoMndHandler : ProblemHandler() {
             }
 }
 
+object IfShortHandler : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+        chainFindAndHandle(file, document, issue, overrideLine) { element: GoSimpleStatement ->
+            // get if statement line
+            val match = Regex("(?<=:)\\d+(?=:)").find(issue.Text)
+            val fix =
+                if (match != null)
+                    arrayOf<LocalQuickFix>(GoShortenIfFix(element, match.value.toInt()))
+                else
+                    EmptyLocalQuickFix
+
+            fix to element.textRange
+        }
+}
+
 // func nolint
 fun funcNoLintHandler(linter: String): ProblemHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =

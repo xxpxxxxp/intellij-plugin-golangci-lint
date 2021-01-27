@@ -40,23 +40,17 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumn;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.ItemEvent;
 import java.io.File;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.Vector;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class GoLinterSettings implements SearchableConfigurable, Disposable {
-    private static final String PROJECT_ROOT_HELP = "https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/README.md#go-project-as-sub-folder";
     private static final String CONFIG_HELP = "https://golangci-lint.run/usage/configuration/#config-file";
 
     private static final Set<String> suggestLinters =
@@ -76,12 +70,12 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private JComboBox<String> linterChooseComboBox;
     private JButton linterChooseButton;
     private JButton fetchLatestReleaseButton;
-    private JLabel projectRootLabel;
     private JLabel projectDir;
     private JButton customProjectSelectButton;
     private JComponent multiLabel;
     private JLabel helpDocumentLabel;
     private JPanel linterSelectPanel;
+    private JCheckBox projectRootCheckBox;
     private AsyncProcessIcon.Big refreshProcessIcon;
     private JTable linterTable;
 
@@ -104,13 +98,13 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         linterChooseComboBox.addActionListener(this::linterSelected);
         linterChooseButton.addActionListener(e -> linterChoose());
         fetchLatestReleaseButton.addActionListener(e -> goGet());
+        projectRootCheckBox.addItemListener(this::enableProjectRoot);
         customProjectSelectButton.addActionListener(e -> customProjectDir());
     }
 
     @SuppressWarnings("unchecked")
     private void createUIComponents() {
         // initialize components
-        projectRootLabel = createLinkLabel(null, desktop -> desktop.browse(new URL(PROJECT_ROOT_HELP).toURI()));
         helpDocumentLabel = createLinkLabel(null, desktop -> desktop.browse(new URL(CONFIG_HELP).toURI()));
         linterSelectPanel = new JPanel(new CardLayout());
 
@@ -353,9 +347,13 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
             GoLinterConfig.INSTANCE.setGoLinterExe((String) linterChooseComboBox.getSelectedItem());
         }
 
-        if (curProject.getBasePath() == null || !Paths.get(curProject.getBasePath()).toString().equals(projectDir.getText())) {
-            GoLinterConfig.INSTANCE.setCustomProjectDir(Optional.of(projectDir.getText()));
-        }
+        GoLinterConfig.INSTANCE.setEnableCustomProjectDir(projectRootCheckBox.isSelected());
+        Optional<String> customProjectDir;
+        if (curProject.getBasePath() != null && Paths.get(curProject.getBasePath()).toString().equals(projectDir.getText()))
+            customProjectDir = Optional.empty();
+        else
+            customProjectDir = Optional.ofNullable(projectDir.getText());
+        GoLinterConfig.INSTANCE.setCustomProjectDir(customProjectDir);
 
         if (!enabledLinters.isEmpty()) {
             GoLinterConfig.INSTANCE.setEnabledLinters(enabledLinters.toArray(new String[0]));
@@ -382,6 +380,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         if (dir == null) {
             dir = "";
         }
+        projectRootCheckBox.setSelected(GoLinterConfig.INSTANCE.getEnableCustomProjectDir());
         projectDir.setText(Paths.get(dir).toString());
 
         resetPanel();
@@ -407,7 +406,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         UIUtil.dispose(this.linterChooseComboBox);
         UIUtil.dispose(this.linterChooseButton);
         UIUtil.dispose(this.fetchLatestReleaseButton);
-        UIUtil.dispose(this.projectRootLabel);
+        UIUtil.dispose(this.projectRootCheckBox);
         UIUtil.dispose(this.projectDir);
         UIUtil.dispose(this.customProjectSelectButton);
         UIUtil.dispose(this.multiLabel);
@@ -415,7 +414,6 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         UIUtil.dispose(this.linterSelectPanel);
         UIUtil.dispose(this.refreshProcessIcon);
         UIUtil.dispose(this.linterTable);
-        this.projectRootLabel = null;
         this.multiLabel = null;
         this.helpDocumentLabel = null;
         this.linterSelectPanel = null;
@@ -475,6 +473,13 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         } catch (Exception ex) {
             showErrorBox("Failed to Get Latest Release", ex.getMessage());
         }
+    }
+
+    private void enableProjectRoot(ItemEvent e) {
+        boolean enabled = projectRootCheckBox.isSelected();
+        projectDir.setEnabled(enabled);
+        customProjectSelectButton.setEnabled(enabled);
+        modified = true;
     }
 
     private void customProjectDir() {
