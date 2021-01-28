@@ -29,6 +29,11 @@ Click `OK`, you are all set!
 
 Please keep in mind that **golangci-lint** is a linter tool, **it only works if your project could build (no syntax error)**, or it will report no issue.
 
+### Project Root Setting
+* If your Go project is the root project, the default setting will work perfectly.
+* If you are using Intellij Ultimate, you have a Go project which isn't the root project, but nested in directories, select `Project Root` to the Go project path.
+* If you have multiple Go sub-projects in the root project, uncheck `Project Root`. Be aware that only the config file directly under the root project will be used.
+
 ### Go Project As Sub Folder
 **Skip this if you are not using config file (eg: `.golangci.yml`)**  
 If you are using Intellij, the Go project is not the root project (sub-folder nested in the root project),  
