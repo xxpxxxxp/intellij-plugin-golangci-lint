@@ -14,7 +14,7 @@ import com.ypwang.plugin.form.GoLinterSettings
 import com.ypwang.plugin.model.GithubRelease
 import org.apache.http.client.config.RequestConfig
 import org.apache.http.impl.client.HttpClientBuilder
-import java.nio.file.Paths
+import java.io.File
 
 class GoLinterSettingsTracker: StartupActivity.DumbAware {
     override fun runActivity(project: Project) {
@@ -92,21 +92,22 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
                 "Download <a href=\"$url\">${latestMeta.name}</a> in browser",
                 NotificationType.INFORMATION,
                 NotificationListener.URL_OPENING_LISTENER).apply {
-            if (Paths.get(GoLinterConfig.goLinterExe).startsWith(executionDir)) {
-                // downloads / control by us, provide update action
+            val file = File(GoLinterConfig.goLinterExe)
+            if (file.canWrite()) {
+                // provide update action
                 this.addAction(NotificationAction.createSimple("Update in background") {
                     ProgressManager.getInstance().run(object : Task.Backgroundable(project, "update golangci-lint") {
                         override fun run(indicator: ProgressIndicator) {
                             try {
-                                fetchLatestGoLinter({ s -> indicator.text = s }, { f -> indicator.fraction = f }, { indicator.isCanceled })
+                                fetchLatestGoLinter(file.parent, { s -> indicator.text = s }, { f -> indicator.fraction = f }, { indicator.isCanceled })
                                 updateSucceedNotification(project, latestMeta)
                             } catch (e: ProcessCanceledException) {
                                 // ignore
                             } catch (e: Exception) {
                                 notificationGroup.createNotification(
-                                        "update golangci-lint failed",
-                                        "Error: ${e.message}",
-                                        NotificationType.ERROR
+                                    "update golangci-lint failed",
+                                    "Error: ${e.message}",
+                                    NotificationType.ERROR
                                 ).notify(project)
                             }
                         }

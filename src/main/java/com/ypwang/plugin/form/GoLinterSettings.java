@@ -13,6 +13,7 @@ import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogBuilder;
+import com.intellij.openapi.ui.JBPopupMenu;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.SystemInfo;
@@ -35,14 +36,18 @@ import org.apache.commons.lang.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.naming.NoPermissionException;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumn;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ItemEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.File;
 import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -70,6 +75,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private JComboBox<String> linterChooseComboBox;
     private JButton linterChooseButton;
     private JButton fetchLatestReleaseButton;
+    private JPopupMenu fetchLatestReleasePopup;
     private JLabel projectDir;
     private JButton customProjectSelectButton;
     private JComponent multiLabel;
@@ -97,7 +103,6 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         linterChooseComboBox.setRenderer(new FileExistCellRender());
         linterChooseComboBox.addActionListener(this::linterSelected);
         linterChooseButton.addActionListener(e -> linterChoose());
-        fetchLatestReleaseButton.addActionListener(e -> goGet());
         projectRootCheckBox.addItemListener(this::enableProjectRoot);
         customProjectSelectButton.addActionListener(e -> customProjectDir());
     }
@@ -106,6 +111,30 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private void createUIComponents() {
         // initialize components
         helpDocumentLabel = createLinkLabel(null, desktop -> desktop.browse(new URL(CONFIG_HELP).toURI()));
+
+        fetchLatestReleasePopup = new JBPopupMenu();
+        fetchLatestReleasePopup.add(new JMenuItem(new AbstractAction(String.format("Download to %s", UtilitiesKt.getExecutionDir())) {
+            public void actionPerformed(ActionEvent e) {
+                fetchLatestExecutable(UtilitiesKt.getExecutionDir());
+            }
+        }));
+        fetchLatestReleasePopup.add(new JMenuItem(new AbstractAction("Select folder...") {
+            public void actionPerformed(ActionEvent e) {
+                FileChooserDescriptor fileChooserDescriptor = new FileChooserDescriptor(false, true, false, false, false, false);
+                VirtualFile hint = LocalFileSystem.getInstance().findFileByPath(UtilitiesKt.getExecutionDir());
+                VirtualFile folder = FileChooser.chooseFile(fileChooserDescriptor, GoLinterSettings.this.settingPanel, null, hint);
+                if (folder != null) {
+                    fetchLatestExecutable(Paths.get(folder.getPath()).toString());
+                }
+            }
+        }));
+        fetchLatestReleaseButton = new JButton();
+        fetchLatestReleaseButton.addMouseListener(new MouseAdapter() {
+            public void mousePressed(MouseEvent e) {
+                fetchLatestReleasePopup.show(e.getComponent(), e.getX(), e.getY());
+            }
+        });
+
         linterSelectPanel = new JPanel(new CardLayout());
 
         // linterTable initialization
@@ -406,6 +435,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         UIUtil.dispose(this.linterChooseComboBox);
         UIUtil.dispose(this.linterChooseButton);
         UIUtil.dispose(this.fetchLatestReleaseButton);
+        UIUtil.dispose(this.fetchLatestReleasePopup);
         UIUtil.dispose(this.projectRootCheckBox);
         UIUtil.dispose(this.projectDir);
         UIUtil.dispose(this.customProjectSelectButton);
@@ -414,6 +444,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         UIUtil.dispose(this.linterSelectPanel);
         UIUtil.dispose(this.refreshProcessIcon);
         UIUtil.dispose(this.linterTable);
+        this.fetchLatestReleaseButton = null;
+        this.fetchLatestReleasePopup = null;
         this.multiLabel = null;
         this.helpDocumentLabel = null;
         this.linterSelectPanel = null;
@@ -452,11 +484,16 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         }
     }
 
-    private void goGet() {
+    private void fetchLatestExecutable(String folder) {
         try {
+            if (!Files.isWritable(Paths.get(folder))) {
+                throw new NoPermissionException(String.format("cannot write to %s", folder));
+            }
+
             setLinterExecutables(ProgressManager.getInstance().runProcessWithProgressSynchronously(() -> {
                 ProgressIndicator progressIndicator = ProgressManager.getInstance().getProgressIndicator();
                 return UtilitiesKt.fetchLatestGoLinter(
+                        folder,
                         (String s) -> {
                             progressIndicator.setText(s);
                             return Unit.INSTANCE;

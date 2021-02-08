@@ -130,7 +130,7 @@ fun getPlatformSpecificBinName(meta: GithubRelease): String {
     return "$LinterName-${meta.name.substring(1)}-$OS-$arch.$postFix"
 }
 
-fun fetchLatestGoLinter(setText: (String) -> Unit, setFraction: (Double) -> Unit, cancelled: () -> Boolean): String {
+fun fetchLatestGoLinter(destDir: String, setText: (String) -> Unit, setFraction: (Double) -> Unit, cancelled: () -> Boolean): String {
     HttpClientBuilder.create().disableContentCompression().build().use { httpClient ->
         setText("Getting latest release meta")
         val latest = getLatestReleaseMeta(httpClient)
@@ -146,12 +146,12 @@ fun fetchLatestGoLinter(setText: (String) -> Unit, setFraction: (Double) -> Unit
             "windows" -> {
                 decompressFun = ::unzip
                 tmpDir = System.getenv("TEMP")
-                toFile = "$executionDir\\$linterExecutableName"
+                toFile = "$destDir\\$linterExecutableName"
             }
             "linux", "darwin" -> {
                 decompressFun = ::untarball
                 tmpDir = "/tmp"
-                toFile = "$executionDir/$linterExecutableName"
+                toFile = "$destDir/$linterExecutableName"
             }
             else -> throw Exception("Unknown system type: $OS")
         }
@@ -222,9 +222,7 @@ private fun copy(input: InputStream, to: String, totalSize: Long, setFraction: (
         var len: Int
         val data = ByteArray(20 * 1024)
 
-        while (true) {
-            if (cancelled()) return
-
+        while (!cancelled()) {
             len = input.read(data)
             if (len == -1) break
             fos.write(data, 0, len)
