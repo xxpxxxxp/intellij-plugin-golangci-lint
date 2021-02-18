@@ -20,7 +20,7 @@ object GoLinterConfig {
         }
 
     var enabledLinters: Array<String>?
-        get() = properties.getValues(GO_ENABLED_LINTERS)?.filter { it != null && it.isNotEmpty() }?.toTypedArray() as Array<String>?
+        get() = properties.getValues(GO_ENABLED_LINTERS)?.filter { it != null && it.isNotEmpty() }?.toTypedArray()
         set(@NotNull value) = properties.setValues(GO_ENABLED_LINTERS, value!!.filter { it.isNotEmpty() }.toTypedArray())
 
     var enableCustomProjectDir: Boolean

@@ -316,7 +316,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
                 val now = System.currentTimeMillis()
                 // freq cap 1min
                 if (showError && (notificationLastTime.get() + notificationFrequencyCap) < now) {
-                    logger.warn("Debug command: ${buildCommand(project.basePath!!, parameters, env)}")
+                    logger.warn("Debug command: ${buildCommand(runningPath, parameters, env)}")
 
                     val notification = when {
                         // syntax error or package not found, fix that first

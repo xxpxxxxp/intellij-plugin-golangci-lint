@@ -61,7 +61,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private static final Set<String> suggestLinters =
             Set.of(
                     "gosimple", "govet", "ineffassign", "staticcheck", "bodyclose",
-                    "dupl", "exportloopref", "funlen", "gocognit", "goconst", "golint",
+                    "dupl", "exportloopref", "funlen", "gocognit", "goconst", "revive",
                     "gocritic", "gocyclo", "goprintffuncname", "gosec", "interfacer",
                     "maligned", "prealloc", "stylecheck", "unconvert", "whitespace", "errorlint"
             );

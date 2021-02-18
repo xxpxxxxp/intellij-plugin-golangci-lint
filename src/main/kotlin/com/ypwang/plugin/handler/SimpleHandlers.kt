@@ -136,40 +136,9 @@ object NlReturnHandler : ProblemHandler() {
     }
 }
 
-// direct to explanation
-object ScopelintHandler : ProblemHandler() {
-    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
-            arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/scopelint.md")) to null
-}
-
-object GoErr113Handler : ProblemHandler() {
-    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
-            arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/goerr113.md")) to null
-}
-
 object GoFumptHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             arrayOf<LocalQuickFix>(GoOpenConfigurable("Config File Watchers") { WatchersConfigurable(it) }) to null
-}
-
-object ExportLoopRefHandler : ProblemHandler() {
-    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
-            arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/exportloopref.md")) to null
-}
-
-object NoCtxRefHandler : ProblemHandler() {
-    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
-            arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/sonatard/noctx/blob/master/README.md")) to null
-}
-
-object MarkZeroHandler : ProblemHandler() {
-    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
-        arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/ashanbrown/makezero#purpose")) to null
-}
-
-object TestHelperHandler : ProblemHandler() {
-    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
-        arrayOf<LocalQuickFix>(GoBringToExplanationFix("https://github.com/kulti/thelper#why")) to null
 }
 
 // just fit range
@@ -220,6 +189,12 @@ object IfShortHandler : ProblemHandler() {
 
             fix to element.textRange
         }
+}
+
+// explanation linter
+fun explanationHandler(url: String): ProblemHandler = object : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+        arrayOf<LocalQuickFix>(GoBringToExplanationFix(url)) to null
 }
 
 // func nolint
