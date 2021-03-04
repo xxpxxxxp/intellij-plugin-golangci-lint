@@ -187,9 +187,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
                 // don't use to much CPU. Runtime should have at least 1 available processor, right?
                 "-j", ((Runtime.getRuntime().availableProcessors() + 3) / 4).toString(),
                 // no issue limit
-                "--max-issues-per-linter", "0", "--max-same-issues", "0",
-                // TODO: this flag is deprecating, while currently there's no better way
-                "--maligned.suggest-new"
+                "--max-issues-per-linter", "0", "--max-same-issues", "0"
         )
 
         customConfigDetected(GoLinterConfig.customProjectDir.orElse(project.basePath!!)).ifPresentOrElse(

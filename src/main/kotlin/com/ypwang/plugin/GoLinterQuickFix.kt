@@ -8,10 +8,9 @@ val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "gocritic" to GoCriticHandler,
         "interfacer" to InterfacerHandler,
         "whitespace" to WhitespaceHandler,
-        "golint" to GolintHandler,
-        "revive" to GolintHandler,
+        "golint" to GolintHandler(),
+        "revive" to ReviveHandler,
         "goconst" to GoConstHandler,
-        "maligned" to MalignedHandler,
         "unparam" to UnparamHandler,
         "dupl" to DuplHandler,
         "godot" to GoDotHandler,
@@ -32,7 +31,9 @@ val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "durationcheck" to explanationHandler("https://github.com/charithe/durationcheck#duration-check"),
         "nlreturn" to NlReturnHandler,
         "errorlint" to ErrorLintHandler,
-        "ifshort" to IfShortHandler
+        "ifshort" to IfShortHandler,
+        "forcetypeassert" to ForceTypeAssertHandler,
+        "predeclared" to PreDeclaredHandler
 ).apply {
     this.putAll(listOf("structcheck", "varcheck", "deadcode", "unused").map { it to NamedElementHandler })
     this.putAll(ProblemHandler.FuncLinters.map { it to funcNoLintHandler(it) })

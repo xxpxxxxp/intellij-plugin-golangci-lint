@@ -152,6 +152,20 @@ object DuplHandler : ProblemHandler() {
     }
 }
 
+object ForceTypeAssertHandler : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+        chainFindAndHandle(file, document, issue, overrideLine) { element: GoStatement ->
+            EmptyLocalQuickFix to element.textRange
+        }
+}
+
+object PreDeclaredHandler : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+        chainFindAndHandle(file, document, issue, overrideLine) { element: GoNamedElement ->
+            EmptyLocalQuickFix to element.textRange
+        }
+}
+
 object UnparamHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
             // intellij will report same issue and provides fix, just fit the range

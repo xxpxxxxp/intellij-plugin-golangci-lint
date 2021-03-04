@@ -9,13 +9,14 @@ import com.intellij.psi.PsiFile
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.quickfix.*
 
-object GolintHandler : ProblemHandler() {
+open class GolintHandler : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+        suggestFix(issue.Text.trim('"').filter { it != '`' }, file, document, issue, overrideLine)
+
     private val replaceRegex = Regex("""`?([\w\d_]+)`? should be `?([\w\d_]+)`?""")
 
-    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> {
-        val text = issue.Text.trim('"').filter { it != '`' }
-
-        return when {
+    protected fun suggestFix(text: String, file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?> =
+        when {
             text == "if block ends with a return statement, so drop this else and outdent its block" ->
                 chainFindAndHandle(file, document, issue, overrideLine) { element: GoElseStatement ->
                     arrayOf<LocalQuickFix>(GoOutdentElseFix(element)) to element.`else`.textRange
@@ -94,5 +95,4 @@ object GolintHandler : ProblemHandler() {
                     NonAvailableFix
             }
         }
-    }
 }
