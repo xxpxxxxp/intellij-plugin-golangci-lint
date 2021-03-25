@@ -9,6 +9,7 @@ object GoLinterConfig {
     private const val GO_ENABLED_LINTERS = "go-enabled-linters"
     private const val GO_ENABLE_CUSTOM_DIR = "go-enable-custom-dir"
     private const val GO_CUSTOM_DIR = "go-custom-dir"
+    private const val GO_CUSTOM_CONFIG = "go-custom-config"
     private const val CHECK_GO_LINTER_EXE = "check-golangci-lint"
 
     private val properties = PropertiesComponent.getInstance()
@@ -31,6 +32,10 @@ object GoLinterConfig {
     var customProjectDir: Optional<String>
         get() = Optional.ofNullable(properties.getValue(GO_CUSTOM_DIR))
         set(value) = value.ifPresentOrElse({ properties.setValue(GO_CUSTOM_DIR, it) }, { properties.setValue(GO_CUSTOM_DIR, null) })
+
+    var customConfigFile: Optional<String>
+        get() = Optional.ofNullable(properties.getValue(GO_CUSTOM_CONFIG))
+        set(value) = value.ifPresentOrElse({ properties.setValue(GO_CUSTOM_CONFIG, it) }, { properties.setValue(GO_CUSTOM_CONFIG, null) })
 
     var checkGoLinterExe: Boolean
         get() = properties.getBoolean(CHECK_GO_LINTER_EXE, true)

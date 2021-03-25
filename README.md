@@ -29,21 +29,19 @@ Click `OK`, you are all set!
 
 Please keep in mind that **golangci-lint** is a linter tool, **it only works if your project could build (no syntax error)**, or it will report no issue.
 
-### Project Root Setting
-* If your Go project is the root project, the default setting will work perfectly.
-* If you are using Intellij Ultimate, you have a Go project which isn't the root project, but nested in directories, select `Project Root` to the Go project path.
-* If you have multiple Go sub-projects in the root project, uncheck `Project Root`. Be aware that only the config file directly under the root project will be used.
-
-### Go Project As Sub Folder
-**Skip this if you are not using config file (eg: `.golangci.yml`)**  
-If you are using Intellij, the Go project is not the root project (sub-folder nested in the root project),  
-and the Go project has its own golangci-lint config file,  
-Please select `project root` to the path of Go project, in order to let the plugin correctly pick up the config file.
-
+### Setting Guide
+* I have a Go project as root project  
+The default setting works perfectly
+* I'm using Intellij Ultimate, I have a Go project nested in sub-dir  
+Select `Project Root` to the Go project path
+* I have multiple Go sub-projects in the root project  
+Uncheck `Project Root`. **Be aware that only the config file directly under the root project will be used.**
+* I want to use a config file not under root project  
+Select `Using config:` to the config file
 
 ### For Windows users
 Please disable goimports / gofmt / gci linters. Use [File-Watcher](https://tech.flyclops.com/posts/2016-06-14-goimports-intellij.html) in IDEA.  
-*It you insist using those 3 linters, download <a href="http://ftp.gnu.org/gnu/diffutils/">GNU diff</a> & <a href="https://ftp.gnu.org/pub/gnu/libiconv/">GNU LibIconv</a> and put them in system PATH (eg: C:\WINDOWS). Normally it's missing from the system.*
+*If you insist using those 3 linters, download <a href="http://ftp.gnu.org/gnu/diffutils/">GNU diff</a> & <a href="https://ftp.gnu.org/pub/gnu/libiconv/">GNU LibIconv</a> and put them in system PATH (eg: C:\WINDOWS). Normally it's missing from the system.*
 
 ## Report a bug
 * Please note down your platform (Win/Linux/Mac), IDEA/Goland version, Go version

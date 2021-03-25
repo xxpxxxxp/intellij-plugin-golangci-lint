@@ -68,7 +68,7 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
     private var customConfig: Optional<String> = Optional.empty()
     private var customConfigLastCheckTime = AtomicLong(-1)
     private fun customConfigDetected(path: String): Optional<String> =
-            // cache the result max 10s
+            // cache the result max 1min
             System.currentTimeMillis().let {
                 if (customConfigLastCheckTime.get() + 60000 < it || customConfigLastCheckTime.get() < GoLinterSettings.getLastSavedTime()) {
                     customConfig = findCustomConfigInPath(path)
@@ -191,23 +191,31 @@ class GoLinterLocalInspection : LocalInspectionTool(), UnfairLocalInspectionTool
         )
 
         customConfigDetected(GoLinterConfig.customProjectDir.orElse(project.basePath!!)).ifPresentOrElse(
-                {
-                    parameters.add("-c")
-                    parameters.add(it)
-                },
-                {
-                    // use default linters
-                    val enabledLinters = GoLinterConfig.enabledLinters
-                    if (enabledLinters != null) {
-                        // no linter is selected, skip run
-                        if (enabledLinters.isEmpty())
-                            throw Exception("all linters disabled")
+            {
+                parameters.add("-c")
+                parameters.add(it)
+            },
+            {
+                GoLinterConfig.customConfigFile.ifPresentOrElse(
+                    {
+                        parameters.add("-c")
+                        parameters.add(it)
+                    },
+                    {
+                        // use default linters
+                        val enabledLinters = GoLinterConfig.enabledLinters
+                        if (enabledLinters != null) {
+                            // no linter is selected, skip run
+                            if (enabledLinters.isEmpty())
+                                throw Exception("all linters disabled")
 
-                        parameters.add("--disable-all")
-                        parameters.add("-E")
-                        parameters.add(enabledLinters.joinToString(","))
+                            parameters.add("--disable-all")
+                            parameters.add("-E")
+                            parameters.add(enabledLinters.joinToString(","))
+                        }
                     }
-                }
+                )
+            }
         )
 
         val module = ModuleUtilCore.findModuleForFile(file)

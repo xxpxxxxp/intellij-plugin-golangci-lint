@@ -1,6 +1,7 @@
 package com.ypwang.plugin.form;
 
 import com.goide.configuration.GoSdkConfigurable;
+import com.google.common.collect.Sets;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
@@ -78,7 +79,10 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private JPopupMenu fetchLatestReleasePopup;
     private JLabel projectDir;
     private JButton customProjectSelectButton;
-    private JComponent multiLabel;
+    private JButton suggestButton;
+    private LinkLabel<String> configLabel;
+    private JButton customConfig;
+    private JPopupMenu customConfigPopup;
     private JLabel helpDocumentLabel;
     private JPanel linterSelectPanel;
     private JCheckBox projectRootCheckBox;
@@ -252,30 +256,92 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     private void resetPanel() {
         Optional<String> configFile = UtilitiesKt.findCustomConfigInPath(projectDir.getText()).map(path -> Paths.get(path).toString());
-        GridConstraints constraints = new GridConstraints(2, 0, 1, 3, 0, 1, 3, 0, null, null, null, 0, false);
 
-        if (multiLabel != null) {
-            settingPanel.remove(multiLabel);
-            UIUtil.dispose(multiLabel);
-        }
+        Arrays.asList(suggestButton, configLabel, customConfigPopup, customConfig).forEach(component -> {
+            settingPanel.remove(component);
+            UIUtil.dispose(component);
+        });
 
         configFile.ifPresentOrElse(
                 f -> {
                     // found an valid config file
-                    multiLabel = createLinkLabel(String.format("Using %s", f), desktop -> desktop.open(new File(f)));
+                    configLabel = createLinkLabel(String.format("Using %s", f), desktop -> desktop.open(new File(f)));
+                    GridConstraints constraints = new GridConstraints(2, 0, 1, 3, 0, 1, 3, 0, null, null, null, 0, false);
+                    settingPanel.add(configLabel, constraints);
                     linterTable.setEnabled(false);
                 },
                 () -> {
-                    JButton tmp = new JButton("Suggest me!");
-                    tmp.addActionListener(this::suggestLinters);
+                    customConfigPopup = new JBPopupMenu();
+                    customConfigPopup.add(new JMenuItem(new AbstractAction("None") {
+                        public void actionPerformed(ActionEvent e) {
+                            configLabel.setText("");
+                            configLabel.setListener(null, null);
+                            suggestButton.setEnabled(true);
+                            linterTable.setEnabled(true);
+                            modified = true;
+                        }
+                    }));
+                    customConfigPopup.add(new JMenuItem(new AbstractAction("Select file...") {
+                        public void actionPerformed(ActionEvent e) {
+                            FileChooserDescriptor fileChooserDescriptor = new FileChooserDescriptor(true, false, false, false, false, false);
+                            fileChooserDescriptor.withFileFilter((VirtualFile file) -> Sets.newHashSet(".json", ".toml", ".yaml", ".yml").contains(file.getExtension().toLowerCase()));
 
-                    constraints.setColSpan(1);
-                    multiLabel = tmp;
-                    linterTable.setEnabled(true);
+                            VirtualFile curSelected = null;
+                            if (configLabel.getText() != null) {
+                                curSelected = LocalFileSystem.getInstance().findFileByPath(configLabel.getText());
+                            }
+
+                            VirtualFile folder = FileChooser.chooseFile(fileChooserDescriptor, GoLinterSettings.this.settingPanel, null, curSelected);
+                            if (folder != null) {
+                                String config = Paths.get(folder.getPath()).toString();
+
+                                configLabel.setText(config);
+                                configLabel.setListener(null, null);
+                                suggestButton.setEnabled(false);
+                                linterTable.setEnabled(false);
+                                modified = true;
+                            }
+                        }
+                    }));
+
+                    customConfig = new JButton("Using config:");
+                    customConfig.addMouseListener(new MouseAdapter() {
+                        public void mousePressed(MouseEvent e) {
+                            customConfigPopup.show(e.getComponent(), e.getX(), e.getY());
+                        }
+                    });
+
+                    GridConstraints constraints = new GridConstraints(2, 0, 1, 1, 0, 1, 3, 0, null, null, null, 0, false);
+                    settingPanel.add(customConfig, constraints);
+
+                    constraints.setColumn(1);
+                    settingPanel.add(configLabel, constraints);
+
+                    constraints.setColumn(2);
+                    suggestButton = new JButton("Suggest me!");
+                    suggestButton.addActionListener(this::suggestLinters);
+                    settingPanel.add(suggestButton, constraints);
+
+                    GoLinterConfig.INSTANCE.getCustomConfigFile().ifPresentOrElse(
+                            config -> {
+                                suggestButton.setEnabled(false);
+                                linterTable.setEnabled(false);
+                                configLabel.setText(Paths.get(config).toString());
+                                configLabel.setListener((aSource, aLinkData) -> {
+                                    try {
+                                        Desktop.getDesktop().open(new File(config));
+                                    } catch (Exception e) {
+                                        // ignore
+                                    }
+                                }, null);
+                            },
+                            () -> {
+                                suggestButton.setEnabled(true);
+                                linterTable.setEnabled(true);
+                            }
+                    );
                 }
         );
-
-        settingPanel.add(multiLabel, constraints);
     }
 
     private void initializeLinters() {
@@ -317,7 +383,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                     enabledLinters.addAll(allLinters.stream().filter(GoLinter::getDefaultEnabled).map(GoLinter::getName).collect(Collectors.toSet()));
                 }
 
-                multiLabel.setEnabled(true);
+                configLabel.setEnabled(true);
             }
 
             ApplicationManager.getApplication().invokeLater(
@@ -384,6 +450,15 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
             customProjectDir = Optional.ofNullable(projectDir.getText());
         GoLinterConfig.INSTANCE.setCustomProjectDir(customProjectDir);
 
+        if (suggestButton != null) {
+            Optional<String> customConfigPath;
+            if (configLabel.getText().isEmpty())
+                customConfigPath = Optional.empty();
+            else
+                customConfigPath = Optional.ofNullable(configLabel.getText());
+            GoLinterConfig.INSTANCE.setCustomConfigFile(customConfigPath);
+        }
+
         if (!enabledLinters.isEmpty()) {
             GoLinterConfig.INSTANCE.setEnabledLinters(enabledLinters.toArray(new String[0]));
         }
@@ -439,14 +514,20 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         UIUtil.dispose(this.projectRootCheckBox);
         UIUtil.dispose(this.projectDir);
         UIUtil.dispose(this.customProjectSelectButton);
-        UIUtil.dispose(this.multiLabel);
+        UIUtil.dispose(this.suggestButton);
+        UIUtil.dispose(this.configLabel);
+        UIUtil.dispose(this.customConfig);
+        UIUtil.dispose(this.customConfigPopup);
         UIUtil.dispose(this.helpDocumentLabel);
         UIUtil.dispose(this.linterSelectPanel);
         UIUtil.dispose(this.refreshProcessIcon);
         UIUtil.dispose(this.linterTable);
         this.fetchLatestReleaseButton = null;
         this.fetchLatestReleasePopup = null;
-        this.multiLabel = null;
+        this.suggestButton = null;
+        this.configLabel = null;
+        this.customConfig = null;
+        this.customConfigPopup = null;
         this.helpDocumentLabel = null;
         this.linterSelectPanel = null;
         this.refreshProcessIcon = null;
