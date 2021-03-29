@@ -1,7 +1,6 @@
 package com.ypwang.plugin.form;
 
 import com.goide.configuration.GoSdkConfigurable;
-import com.google.common.collect.Sets;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
@@ -79,8 +78,9 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private JPopupMenu fetchLatestReleasePopup;
     private JLabel projectDir;
     private JButton customProjectSelectButton;
+    private LinkLabel<String> configLabel1;
     private JButton suggestButton;
-    private LinkLabel<String> configLabel;
+    private LinkLabel<String> configLabel2;
     private JButton customConfig;
     private JPopupMenu customConfigPopup;
     private JLabel helpDocumentLabel;
@@ -257,55 +257,65 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private void resetPanel() {
         Optional<String> configFile = UtilitiesKt.findCustomConfigInPath(projectDir.getText()).map(path -> Paths.get(path).toString());
 
-        Arrays.asList(suggestButton, configLabel, customConfigPopup, customConfig).forEach(component -> {
-            settingPanel.remove(component);
-            UIUtil.dispose(component);
+        Arrays.asList(configLabel1, suggestButton, configLabel2, customConfigPopup, customConfig).forEach(component -> {
+            if (component != null) {
+                settingPanel.remove(component);
+                UIUtil.dispose(component);
+            }
         });
 
         configFile.ifPresentOrElse(
                 f -> {
                     // found an valid config file
-                    configLabel = createLinkLabel(String.format("Using %s", f), desktop -> desktop.open(new File(f)));
+                    configLabel1 = createLinkLabel(String.format("Using %s", f), desktop -> desktop.open(new File(f)));
                     GridConstraints constraints = new GridConstraints(2, 0, 1, 3, 0, 1, 3, 0, null, null, null, 0, false);
-                    settingPanel.add(configLabel, constraints);
+                    settingPanel.add(configLabel1, constraints);
                     linterTable.setEnabled(false);
                 },
                 () -> {
                     customConfigPopup = new JBPopupMenu();
                     customConfigPopup.add(new JMenuItem(new AbstractAction("None") {
                         public void actionPerformed(ActionEvent e) {
-                            configLabel.setText("");
-                            configLabel.setListener(null, null);
+                            configLabel2.setText("");
+                            configLabel2.setListener(null, null);
                             suggestButton.setEnabled(true);
                             linterTable.setEnabled(true);
                             modified = true;
+                            initializeLinters();
                         }
                     }));
                     customConfigPopup.add(new JMenuItem(new AbstractAction("Select file...") {
                         public void actionPerformed(ActionEvent e) {
                             FileChooserDescriptor fileChooserDescriptor = new FileChooserDescriptor(true, false, false, false, false, false);
-                            fileChooserDescriptor.withFileFilter((VirtualFile file) -> Sets.newHashSet(".json", ".toml", ".yaml", ".yml").contains(file.getExtension().toLowerCase()));
 
                             VirtualFile curSelected = null;
-                            if (configLabel.getText() != null) {
-                                curSelected = LocalFileSystem.getInstance().findFileByPath(configLabel.getText());
+                            if (configLabel2.getText() != null) {
+                                curSelected = LocalFileSystem.getInstance().findFileByPath(configLabel2.getText());
                             }
 
                             VirtualFile folder = FileChooser.chooseFile(fileChooserDescriptor, GoLinterSettings.this.settingPanel, null, curSelected);
                             if (folder != null) {
                                 String config = Paths.get(folder.getPath()).toString();
 
-                                configLabel.setText(config);
-                                configLabel.setListener(null, null);
                                 suggestButton.setEnabled(false);
                                 linterTable.setEnabled(false);
+                                configLabel2.setText(config);
+                                configLabel2.setListener((aSource, aLinkData) -> {
+                                    try {
+                                        Desktop.getDesktop().open(new File(config));
+                                    } catch (Exception ex) {
+                                        // ignore
+                                    }
+                                }, null);
                                 modified = true;
+                                initializeLinters();
                             }
                         }
                     }));
 
                     customConfig = new JButton("Using config:");
                     customConfig.addMouseListener(new MouseAdapter() {
+                        @Override
                         public void mousePressed(MouseEvent e) {
                             customConfigPopup.show(e.getComponent(), e.getX(), e.getY());
                         }
@@ -315,7 +325,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                     settingPanel.add(customConfig, constraints);
 
                     constraints.setColumn(1);
-                    settingPanel.add(configLabel, constraints);
+                    configLabel2 = new LinkLabel<>();
+                    settingPanel.add(configLabel2, constraints);
 
                     constraints.setColumn(2);
                     suggestButton = new JButton("Suggest me!");
@@ -326,8 +337,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                             config -> {
                                 suggestButton.setEnabled(false);
                                 linterTable.setEnabled(false);
-                                configLabel.setText(Paths.get(config).toString());
-                                configLabel.setListener((aSource, aLinkData) -> {
+                                configLabel2.setText(config);
+                                configLabel2.setListener((aSource, aLinkData) -> {
                                     try {
                                         Desktop.getDesktop().open(new File(config));
                                     } catch (Exception e) {
@@ -336,6 +347,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                                 }, null);
                             },
                             () -> {
+                                configLabel2.setText("");
+                                configLabel2.setListener(null, null);
                                 suggestButton.setEnabled(true);
                                 linterTable.setEnabled(true);
                             }
@@ -358,8 +371,17 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
             if (selectedLinter != null && new File(selectedLinter).canExecute()) {
                 try {
+                    List<String> arguments = new ArrayList<>();
+                    arguments.add(selectedLinter);
+                    arguments.add("linters");
+
+                    if (configLabel2 != null && !configLabel2.getText().isEmpty()) {
+                        arguments.add("-c");
+                        arguments.add(configLabel2.getText());
+                    }
+
                     allLinters.addAll(GolangCiOutputParser.INSTANCE.parseLinters(GolangCiOutputParser.INSTANCE.runProcess(
-                            Arrays.asList(selectedLinter, "linters"),
+                            arguments,
                             StringUtils.isNotEmpty(projectDir.getText()) ? projectDir.getText() : null,
                             Collections.singletonMap("PATH", UtilitiesKt.getSystemPath(curProject))
                     )));
@@ -382,8 +404,6 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                     // default enabled linters
                     enabledLinters.addAll(allLinters.stream().filter(GoLinter::getDefaultEnabled).map(GoLinter::getName).collect(Collectors.toSet()));
                 }
-
-                configLabel.setEnabled(true);
             }
 
             ApplicationManager.getApplication().invokeLater(
@@ -450,12 +470,12 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
             customProjectDir = Optional.ofNullable(projectDir.getText());
         GoLinterConfig.INSTANCE.setCustomProjectDir(customProjectDir);
 
-        if (suggestButton != null) {
+        if (configLabel2 != null) {
             Optional<String> customConfigPath;
-            if (configLabel.getText().isEmpty())
+            if (configLabel2.getText().isEmpty())
                 customConfigPath = Optional.empty();
             else
-                customConfigPath = Optional.ofNullable(configLabel.getText());
+                customConfigPath = Optional.ofNullable(configLabel2.getText());
             GoLinterConfig.INSTANCE.setCustomConfigFile(customConfigPath);
         }
 
@@ -514,8 +534,9 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         UIUtil.dispose(this.projectRootCheckBox);
         UIUtil.dispose(this.projectDir);
         UIUtil.dispose(this.customProjectSelectButton);
+        UIUtil.dispose(this.configLabel1);
         UIUtil.dispose(this.suggestButton);
-        UIUtil.dispose(this.configLabel);
+        UIUtil.dispose(this.configLabel2);
         UIUtil.dispose(this.customConfig);
         UIUtil.dispose(this.customConfigPopup);
         UIUtil.dispose(this.helpDocumentLabel);
@@ -524,8 +545,9 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         UIUtil.dispose(this.linterTable);
         this.fetchLatestReleaseButton = null;
         this.fetchLatestReleasePopup = null;
+        this.configLabel1 = null;
         this.suggestButton = null;
-        this.configLabel = null;
+        this.configLabel2 = null;
         this.customConfig = null;
         this.customConfigPopup = null;
         this.helpDocumentLabel = null;
