@@ -1,7 +1,7 @@
 package com.ypwang.plugin.handler
 
 import com.goide.psi.GoFile
-import com.intellij.codeInspection.LocalQuickFix
+import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
@@ -10,7 +10,7 @@ import com.ypwang.plugin.model.LintIssue
 
 abstract class ProblemHandler {
     companion object {
-        val EmptyLocalQuickFix = arrayOf<LocalQuickFix>()
+        val EmptyLocalQuickFix = arrayOf<IntentionAction>()
         val NonAvailableFix = EmptyLocalQuickFix to null
         // they reports issue of whole function
         val FuncLinters = setOf("funlen", "gocognit", "gochecknoinits", "gocyclo", "nakedret")
@@ -27,8 +27,8 @@ abstract class ProblemHandler {
             document: Document,
             issue: LintIssue,
             overrideLine: Int,
-            handler: (T) -> Pair<Array<LocalQuickFix>, TextRange?>
-    ): Pair<Array<LocalQuickFix>, TextRange?> {
+            handler: (T) -> Pair<Array<IntentionAction>, TextRange?>
+    ): Pair<Array<IntentionAction>, TextRange?> {
         var element = file.findElementAt(calcPos(document, issue, overrideLine))
         while (true) {
             // jump out quicker
@@ -40,7 +40,7 @@ abstract class ProblemHandler {
         }
     }
 
-    fun suggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange> {
+    fun suggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<IntentionAction>, TextRange> {
         val (fix, range) = try {
             doSuggestFix(file, document, issue, overrideLine)
         } catch (e: Exception) {
@@ -57,5 +57,5 @@ abstract class ProblemHandler {
     }
 
     open fun description(issue: LintIssue): String = "${issue.Text} (${issue.FromLinter})"
-    abstract fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<LocalQuickFix>, TextRange?>
+    abstract fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<IntentionAction>, TextRange?>
 }
