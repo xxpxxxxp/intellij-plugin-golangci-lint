@@ -4,17 +4,18 @@ import com.goide.psi.GoFunctionOrMethodDeclaration
 import com.goide.psi.GoParameterDeclaration
 import com.goide.psi.GoParameters
 import com.goide.psi.impl.GoElementFactory
-import com.intellij.codeInspection.LocalQuickFixOnPsiElement
+import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 
-class GoShortenParameterFix(element: GoFunctionOrMethodDeclaration): LocalQuickFixOnPsiElement(element)  {
+class GoShortenParameterFix(element: GoFunctionOrMethodDeclaration)
+    : LocalQuickFixAndIntentionActionOnPsiElement(element)  {
     override fun getFamilyName(): String = text
-
     override fun getText(): String = "Shorten parameters"
 
-    override fun invoke(project: Project, file: PsiFile, startElement: PsiElement, endElement: PsiElement) {
+    override fun invoke(project: Project, file: PsiFile, editor: Editor?, startElement: PsiElement, endElement: PsiElement) {
         val signature = (startElement as GoFunctionOrMethodDeclaration).signature!!
         signature.replace(GoElementFactory.createFunctionSignatureFromText(
             project,

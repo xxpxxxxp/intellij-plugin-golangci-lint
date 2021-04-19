@@ -1,27 +1,29 @@
 package com.ypwang.plugin.quickfix
 
 import com.goide.psi.GoNamedElement
-import com.intellij.codeInspection.LocalQuickFixOnPsiElement
+import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
 import com.intellij.ide.DataManager
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.fileEditor.FileEditorManager
-import com.intellij.openapi.fileEditor.TextEditor
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.refactoring.RefactoringActionHandlerFactory
 import com.intellij.refactoring.rename.RenameHandlerRegistry
 
-class GoRefactorFix(element: GoNamedElement): LocalQuickFixOnPsiElement(element) {
+class GoRefactorFix(element: GoNamedElement)
+    : LocalQuickFixAndIntentionActionOnPsiElement(element) {
     override fun getFamilyName(): String = text
-
     override fun getText(): String = "Renaming..."
 
-    override fun invoke(project: Project, file: PsiFile, startElement: PsiElement, endElement: PsiElement) {
+    override fun invoke(project: Project, file: PsiFile, editor: Editor?, startElement: PsiElement, endElement: PsiElement) {
         val element = startElement as GoNamedElement
-        val editor = (FileEditorManager.getInstance(project).selectedEditor as TextEditor?)?.editor ?: return
+
+        if (editor == null)
+            return
+
         // move caret, focus on newly created const
         editor.caretModel.moveToOffset(element.identifier!!.textOffset)
         // finally, perform rename on the replaced literal

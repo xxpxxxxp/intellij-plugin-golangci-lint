@@ -4,17 +4,18 @@ import com.goide.psi.GoExprSwitchStatement
 import com.goide.psi.GoSwitchStatement
 import com.goide.psi.GoTypeSwitchStatement
 import com.goide.psi.impl.GoElementFactory
-import com.intellij.codeInspection.LocalQuickFixOnPsiElement
+import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 
-class GoSingleCaseSwitchFix(element: GoSwitchStatement): LocalQuickFixOnPsiElement(element) {
+class GoSingleCaseSwitchFix(element: GoSwitchStatement)
+    : LocalQuickFixAndIntentionActionOnPsiElement(element) {
     override fun getFamilyName(): String = text
-
     override fun getText(): String = "Rewrite to 'if'"
 
-    override fun invoke(project: Project, file: PsiFile, startElement: PsiElement, endElement: PsiElement) {
+    override fun invoke(project: Project, file: PsiFile, editor: Editor?, startElement: PsiElement, endElement: PsiElement) {
         when (val element = startElement as GoSwitchStatement) {
             is GoTypeSwitchStatement -> {
                 val caseClause = element.typeCaseClauseList.single()

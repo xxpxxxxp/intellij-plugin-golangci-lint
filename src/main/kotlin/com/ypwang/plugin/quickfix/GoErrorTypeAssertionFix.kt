@@ -3,21 +3,22 @@ package com.ypwang.plugin.quickfix
 import com.goide.psi.GoShortVarDeclaration
 import com.goide.psi.GoTypeAssertionExpr
 import com.goide.psi.impl.GoElementFactory
-import com.intellij.codeInspection.LocalQuickFixOnPsiElement
+import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 
-class GoErrorTypeAssertionFix(element: GoTypeAssertionExpr, private val lineStart: Int) : LocalQuickFixOnPsiElement(element) {
+class GoErrorTypeAssertionFix(element: GoTypeAssertionExpr, private val lineStart: Int)
+    : LocalQuickFixAndIntentionActionOnPsiElement(element) {
     companion object {
         private var count = 0
     }
 
     override fun getFamilyName(): String = text
-
     override fun getText(): String = "Rewrite to errors.Is"
 
-    override fun invoke(project: Project, file: PsiFile, startElement: PsiElement, endElement: PsiElement) {
+    override fun invoke(project: Project, file: PsiFile, editor: Editor?, startElement: PsiElement, endElement: PsiElement) {
         val element = startElement as GoTypeAssertionExpr
         val parent = element.parent as GoShortVarDeclaration
 

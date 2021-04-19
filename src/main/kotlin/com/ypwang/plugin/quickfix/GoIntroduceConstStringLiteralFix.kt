@@ -5,26 +5,28 @@ import com.goide.psi.GoConstSpec
 import com.goide.psi.GoFile
 import com.goide.psi.GoStringLiteral
 import com.goide.psi.impl.GoElementFactory
-import com.intellij.codeInspection.LocalQuickFix
-import com.intellij.codeInspection.ProblemDescriptor
+import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.ide.DataManager
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.fileEditor.FileEditorManager
-import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.openapi.project.Project
+import com.intellij.psi.PsiFile
 import com.intellij.refactoring.RefactoringActionHandlerFactory
 import com.intellij.refactoring.rename.RenameHandlerRegistry
 
-class GoIntroduceConstStringLiteralFix(private val literal: String) : LocalQuickFix {
-    override fun getFamilyName(): String = "Introduce const string $literal"
+class GoIntroduceConstStringLiteralFix(private val literal: String) : IntentionAction {
+    override fun getFamilyName(): String = text
+    override fun getText(): String = "Introduce const string $literal"
+    override fun isAvailable(project: Project, editor: Editor?, file: PsiFile?): Boolean = true
+    override fun startInWriteAction(): Boolean = true
 
     // Buggy, need improve
-    override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
+    override fun invoke(project: Project, e: Editor?, f: PsiFile?) {
         try {
-            val file = descriptor.psiElement.containingFile as GoFile
+            val file = f as GoFile
             val content = FileDocumentManager.getInstance().getDocument(file.virtualFile)?.charsSequence ?: return
 
             val offsets = mutableListOf<Int>()
@@ -37,7 +39,7 @@ class GoIntroduceConstStringLiteralFix(private val literal: String) : LocalQuick
             }
 
             if (offsets.isEmpty()) return
-            val editor = (FileEditorManager.getInstance(project).selectedEditor as TextEditor?)?.editor ?: return
+            val editor = e ?: return
 
             val replace = GoElementFactory.createReferenceExpression(project, "_a_good_name")
             // be carefully with reversed, since replacement above will change offset

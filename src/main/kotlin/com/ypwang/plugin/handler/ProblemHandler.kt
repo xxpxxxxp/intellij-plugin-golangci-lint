@@ -48,12 +48,7 @@ abstract class ProblemHandler {
             NonAvailableFix
         }
 
-        return if (range != null) {
-            fix to range
-        } else {
-            val pos = calcPos(document, issue, overrideLine)
-            fix to TextRange.create(pos, maxOf(document.getLineEndOffset(overrideLine), pos))
-        }
+        return fix to (range ?: calcPos(document, issue, overrideLine).let { TextRange.create(it, maxOf(document.getLineEndOffset(overrideLine), it)) })
     }
 
     open fun description(issue: LintIssue): String = "${issue.Text} (${issue.FromLinter})"

@@ -11,9 +11,9 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import java.util.*
 
-class GoReorderFuncParamFix(element: GoFunctionOrMethodDeclaration): LocalQuickFixAndIntentionActionOnPsiElement(element) {
+class GoReorderFuncParamFix(element: GoFunctionOrMethodDeclaration)
+    : LocalQuickFixAndIntentionActionOnPsiElement(element) {
     override fun getFamilyName(): String = text
-
     override fun getText(): String = "Reorder parameters"
 
     override fun invoke(project: Project, file: PsiFile, editor: Editor?, startElement: PsiElement, endElement: PsiElement) {

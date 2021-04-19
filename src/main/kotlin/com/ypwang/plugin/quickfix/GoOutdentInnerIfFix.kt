@@ -9,9 +9,9 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 
-class GoOutdentInnerIfFix(element: GoElseStatement): LocalQuickFixAndIntentionActionOnPsiElement(element) {
+class GoOutdentInnerIfFix(element: GoElseStatement)
+    : LocalQuickFixAndIntentionActionOnPsiElement(element) {
     override fun getFamilyName(): String = text
-
     override fun getText(): String = "Outdent inner 'if' branch"
 
     override fun invoke(project: Project, file: PsiFile, editor: Editor?, startElement: PsiElement, endElement: PsiElement) {

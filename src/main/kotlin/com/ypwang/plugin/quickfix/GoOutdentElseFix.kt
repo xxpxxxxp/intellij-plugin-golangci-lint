@@ -15,9 +15,9 @@ import com.intellij.psi.impl.source.codeStyle.CodeEditUtil
 import com.intellij.util.SmartList
 import com.intellij.util.containers.ContainerUtil
 
-class GoOutdentElseFix(element: GoStatement): LocalQuickFixAndIntentionActionOnPsiElement(element) {
+class GoOutdentElseFix(element: GoStatement)
+    : LocalQuickFixAndIntentionActionOnPsiElement(element) {
     override fun getFamilyName(): String = text
-
     override fun getText(): String = "Outdent 'else' branch"
 
     override fun invoke(project: Project, file: PsiFile, editor: Editor?, startElement: PsiElement, endElement: PsiElement) {

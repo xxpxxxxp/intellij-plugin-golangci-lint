@@ -3,16 +3,18 @@ package com.ypwang.plugin.quickfix
 import com.goide.psi.GoFile
 import com.goide.psi.GoImportSpec
 import com.goide.psi.GoReferencesSearch
-import com.intellij.codeInspection.LocalQuickFixOnPsiElement
+import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 
-class GoRemoveDuplImportFix(element: GoImportSpec) : LocalQuickFixOnPsiElement(element) {
+class GoRemoveDuplImportFix(element: GoImportSpec)
+    : LocalQuickFixAndIntentionActionOnPsiElement(element) {
     override fun getFamilyName(): String = text
     override fun getText(): String = "Merge import"
 
-    override fun invoke(project: Project, file: PsiFile, startElement: PsiElement, endElement: PsiElement) {
+    override fun invoke(project: Project, file: PsiFile, editor: Editor?, startElement: PsiElement, endElement: PsiElement) {
         val element = startElement as GoImportSpec
 
         if (file is GoFile) {

@@ -1,20 +1,29 @@
 package com.ypwang.plugin.quickfix
 
 import com.goide.psi.impl.GoElementFactory
-import com.intellij.codeInspection.LocalQuickFix
-import com.intellij.codeInspection.ProblemDescriptor
+import com.intellij.codeInsight.intention.IntentionAction
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiComment
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiFile
 
-class NoLintSingleLineCommentFix(private val linter: String): LocalQuickFix {
-    override fun getFamilyName(): String = "Suppress linter '$linter' here"
+class NoLintSingleLineCommentFix(
+    private val linter: String,
+    private val lineNumber: Int
+    ) : IntentionAction {
+    override fun getText(): String = "Suppress linter '$linter' here"
+    override fun getFamilyName(): String = text
+    override fun startInWriteAction(): Boolean = true
+    override fun isAvailable(project: Project, editor: Editor?, file: PsiFile?): Boolean = true
 
-    override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
-        val file = descriptor.psiElement.containingFile
+    override fun invoke(project: Project, editor: Editor?, file: PsiFile?) {
+        if (file == null)
+            return
+
         val document = PsiDocumentManager.getInstance(project).getDocument(file) ?: return
         // trick: for a specific line, line comment must at end of line (right before \n)
-        val element = file.findElementAt(document.getLineEndOffset(descriptor.lineNumber))?.prevSibling ?: return
+        val element = file.findElementAt(document.getLineEndOffset(lineNumber))?.prevSibling ?: return
         if (element is PsiComment) {
             // replace
             val text = element.text
