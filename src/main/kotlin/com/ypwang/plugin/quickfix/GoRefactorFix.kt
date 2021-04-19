@@ -19,11 +19,10 @@ class GoRefactorFix(element: GoNamedElement)
     override fun getText(): String = "Renaming..."
 
     override fun invoke(project: Project, file: PsiFile, editor: Editor?, startElement: PsiElement, endElement: PsiElement) {
-        val element = startElement as GoNamedElement
-
         if (editor == null)
             return
 
+        val element = startElement as GoNamedElement
         // move caret, focus on newly created const
         editor.caretModel.moveToOffset(element.identifier!!.textOffset)
         // finally, perform rename on the replaced literal

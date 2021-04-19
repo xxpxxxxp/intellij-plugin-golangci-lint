@@ -10,7 +10,7 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.ypwang.plugin.model.LintIssue
-import com.ypwang.plugin.quickfix.GoDeleteElementsFix
+import com.ypwang.plugin.quickfix.GoDeleteElementFix
 import com.ypwang.plugin.quickfix.GoReferenceRenameToBlankQuickFix
 import com.ypwang.plugin.quickfix.GoReplaceElementFix
 
@@ -44,7 +44,7 @@ object StaticCheckHandler : ProblemHandler() {
                 // empty branch
                 "SA9003" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoStatement ->
-                        arrayOf<IntentionAction>(GoDeleteElementsFix(listOf(element), "Remove branch")) to element.textRange
+                        arrayOf<IntentionAction>(GoDeleteElementFix(element, "Remove branch")) to element.textRange
                     }
                 else -> NonAvailableFix
             }

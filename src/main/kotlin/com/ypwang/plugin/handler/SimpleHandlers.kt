@@ -3,6 +3,7 @@ package com.ypwang.plugin.handler
 import com.goide.psi.*
 import com.goide.psi.impl.GoElementFactory
 import com.goide.psi.impl.GoLiteralImpl
+import com.goide.quickfix.GoDeleteRangeQuickFix
 import com.goide.quickfix.GoRenameToQuickFix
 import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
@@ -71,7 +72,7 @@ object WhitespaceHandler : ProblemHandler() {
 
         val start = document.getLineStartOffset(issue.LineRange.From + shift)
         val end = document.getLineEndOffset(issue.LineRange.To + shift)
-        if (elements.isNotEmpty()) return arrayOf<IntentionAction>(GoDeleteElementsFix(elements, "Remove whitespace")) to TextRange(start, end)
+        if (elements.isNotEmpty()) return arrayOf<IntentionAction>(GoDeleteRangeQuickFix(elements.first(), elements.last(), "Remove whitespace")) to TextRange(start, end)
 
         return NonAvailableFix
     }

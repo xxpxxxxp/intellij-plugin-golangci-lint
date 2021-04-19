@@ -2,10 +2,7 @@ package com.ypwang.plugin.handler
 
 import com.goide.inspections.GoInspectionUtil
 import com.goide.psi.*
-import com.goide.quickfix.GoDeleteConstDefinitionQuickFix
-import com.goide.quickfix.GoDeleteQuickFix.Fixes.DELETE_FUNCTION_FIX
 import com.goide.quickfix.GoDeleteRangeQuickFix
-import com.goide.quickfix.GoDeleteVarDefinitionQuickFix
 import com.goide.quickfix.GoRenameToBlankQuickFix
 import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.openapi.editor.Document
@@ -14,7 +11,9 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.impl.source.tree.PsiWhiteSpaceImpl
 import com.ypwang.plugin.model.LintIssue
-import com.ypwang.plugin.quickfix.GoDeleteElementsFix
+import com.ypwang.plugin.quickfix.GoDeleteConstDefinitionFix
+import com.ypwang.plugin.quickfix.GoDeleteElementFix
+import com.ypwang.plugin.quickfix.GoDeleteVarDefinitionFix
 
 object NamedElementHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<IntentionAction>, TextRange?> =
@@ -32,20 +31,20 @@ object NamedElementHandler : ProblemHandler() {
                                 end = end.nextSibling
 
                             // remove entire line
-                            arrayOf<IntentionAction>(toIntentionAction(GoDeleteRangeQuickFix(start, end, "Delete field '${element.identifier.text}'")))
+                            arrayOf<IntentionAction>(GoDeleteRangeQuickFix(start, end, "Delete field '${element.identifier.text}'"))
                         } else arrayOf()
                     }
                     is GoFunctionDeclaration ->
-                        arrayOf<IntentionAction>(toIntentionAction(DELETE_FUNCTION_FIX), toIntentionAction(GoRenameToBlankQuickFix(element)))
+                        arrayOf<IntentionAction>(GoDeleteElementFix(element, "Delete function"), toIntentionAction(GoRenameToBlankQuickFix(element)))
                     is GoTypeSpec ->
-                        arrayOf<IntentionAction>(toIntentionAction(DELETE_TYPE_FIX))
+                        arrayOf<IntentionAction>(GoDeleteElementFix(element, "Delete type"))
                     is GoVarDefinition ->
-                        (if (GoInspectionUtil.canDeleteDefinition(element)) arrayOf<IntentionAction>(toIntentionAction(GoRenameToBlankQuickFix(element)), toIntentionAction(GoDeleteVarDefinitionQuickFix(element.name)))
+                        (if (GoInspectionUtil.canDeleteDefinition(element)) arrayOf<IntentionAction>(toIntentionAction(GoRenameToBlankQuickFix(element)), GoDeleteVarDefinitionFix(element))
                         else arrayOf<IntentionAction>(toIntentionAction(GoRenameToBlankQuickFix(element))))
                     is GoConstDefinition ->
-                        (if (GoInspectionUtil.canDeleteDefinition(element)) arrayOf<IntentionAction>(toIntentionAction(GoDeleteConstDefinitionQuickFix(element.name))) else arrayOf())
+                        (if (GoInspectionUtil.canDeleteDefinition(element)) arrayOf<IntentionAction>(toIntentionAction(GoDeleteConstDefinitionFix(element))) else arrayOf())
                     is GoMethodDeclaration ->
-                        arrayOf<IntentionAction>(GoDeleteElementsFix(listOf(element), "Delete method"))
+                        arrayOf<IntentionAction>(GoDeleteElementFix(element, "Delete method"))
                     else -> EmptyLocalQuickFix
                 } to element.identifier?.textRange
             }

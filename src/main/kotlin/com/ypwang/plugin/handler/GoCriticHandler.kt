@@ -59,14 +59,14 @@ object GoCriticHandler : ProblemHandler() {
 
             addHandler(this, "unslice:") { _, _, issue, _, element: GoIndexOrSliceExpr ->
                 if (issue.Text.contains(element.text) && element.expression != null)
-                    arrayOf<IntentionAction>(GoReplaceExpressionFix(element.expression!!.text, element)) to element.textRange
+                    arrayOf<IntentionAction>(GoReplaceElementFix(element.expression!!.text, element, GoExpression::class.java)) to element.textRange
                 else NonAvailableFix
             }
 
             addHandler(this, "captLocal:") { _, _, _, _, element: GoParamDefinition ->
                 val text = element.identifier.text
                 if (text[0].isUpperCase())
-                    arrayOf(GoRenameToQuickFix(element, text[0].toLowerCase() + text.substring(1)).toIntentionAction()) to element.identifier.textRange
+                    arrayOf<IntentionAction>(toIntentionAction(GoRenameToQuickFix(element, text[0].toLowerCase() + text.substring(1)))) to element.identifier.textRange
                 else NonAvailableFix
             }
 
@@ -156,7 +156,7 @@ object GoCriticHandler : ProblemHandler() {
             }
 
             addHandler(this, "equalFold:") { _, _, issue, _, element: GoConditionalExpr ->
-                arrayOf<IntentionAction>(GoReplaceExpressionFix(issue.Text.substring(35), element)) to element.textRange
+                arrayOf<IntentionAction>(GoReplaceElementFix(issue.Text.substring(35), element, GoExpression::class.java)) to element.textRange
             }
 
             addHandler(this, "yodaStyleExpr:") { _, _, _, _, element: GoConditionalExpr ->

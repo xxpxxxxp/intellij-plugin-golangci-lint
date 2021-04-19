@@ -1,5 +1,8 @@
 package com.ypwang.plugin.quickfix
 
+import com.goide.psi.GoExpression
+import com.goide.psi.GoStatement
+import com.goide.psi.GoStringLiteral
 import com.goide.psi.impl.GoElementFactory
 import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
 import com.intellij.openapi.editor.Editor
@@ -16,6 +19,12 @@ class GoReplaceElementFix<T: PsiElement>(
     override fun getText(): String = "Replace with '$replacement'"
 
     override fun invoke(project: Project, file: PsiFile, editor: Editor?, startElement: PsiElement, endElement: PsiElement) {
-        startElement.replace(GoElementFactory.createElement(project, "package a; func a() {\n $replacement }", typeTag) ?: return)
+        startElement.replace(
+            when (typeTag) {
+                GoExpression::class.java -> GoElementFactory.createExpression(project, replacement)
+                GoStatement::class.java -> GoElementFactory.createStatement(project, replacement)
+                else -> GoElementFactory.createElement(project, "package a; func a() {\n $replacement }", typeTag) ?: return
+            }
+        )
     }
 }

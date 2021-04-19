@@ -27,14 +27,14 @@ object GoSimpleHandler : ProblemHandler() {
                         val begin = issue.Text.indexOf('`')
                         val end = issue.Text.indexOf('`', begin + 1)
                         val replace = issue.Text.substring(begin + 1, end)
-                        arrayOf<IntentionAction>(GoReplaceExpressionFix(replace, element)) to element.textRange
+                        arrayOf<IntentionAction>(GoReplaceElementFix(replace, element, GoExpression::class.java)) to element.textRange
                     }
                 // should use !strings.Contains(domain, \".\") instead
                 // should use !bytes.Equal(meta.CRC, computed) instead
                 "S1003", "S1004" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoSimpleStatement ->
                         if (element.leftHandExprList != null)
-                            arrayOf<IntentionAction>(GoReplaceStatementFix(issue.Text.substring(18, issue.Text.length - 8), element)) to element.textRange
+                            arrayOf<IntentionAction>(GoReplaceElementFix(issue.Text.substring(18, issue.Text.length - 8), element, GoStatement::class.java)) to element.textRange
                         else NonAvailableFix
                     }
                 "S1005" ->
@@ -49,7 +49,7 @@ object GoSimpleHandler : ProblemHandler() {
                 "S1006" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoForStatement ->
                         if (element.expression?.text == "true")
-                            arrayOf<IntentionAction>(GoDeleteElementsFix(listOf(element.expression!!), "Remove condition 'true'")) to element.expression!!.textRange
+                            arrayOf<IntentionAction>(GoDeleteElementFix(element.expression!!, "Remove condition 'true'")) to element.expression!!.textRange
                         else NonAvailableFix
                     }
                 // should use raw string (`...`) with regexp.MustCompile to avoid having to escape twice
@@ -89,7 +89,7 @@ object GoSimpleHandler : ProblemHandler() {
                             element.parent.parent is GoCallExpr) {
                         val expr = element.parent.parent.parent
                         if (expr is GoReferenceExpression && expr.text == "time.Now().Sub")
-                            return arrayOf<IntentionAction>(GoReplaceExpressionFix("time.Since", expr)) to expr.textRange
+                            return arrayOf<IntentionAction>(GoReplaceElementFix("time.Since", expr, GoExpression::class.java)) to expr.textRange
                     }
                     NonAvailableFix
                 }
@@ -118,7 +118,7 @@ object GoSimpleHandler : ProblemHandler() {
                 "S1023" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoReturnStatement ->
                         if (element.expressionList.isEmpty())
-                            arrayOf<IntentionAction>(GoDeleteElementsFix(listOf(element.nextSibling, element), "Remove redundant 'return'")) to element.textRange
+                            arrayOf<IntentionAction>(GoDeleteRangeQuickFix(element, element.nextSibling, "Remove redundant 'return'")) to element.textRange
                         else NonAvailableFix
                     }
                 // should use w.buff.String() instead of string(w.buff.Bytes())

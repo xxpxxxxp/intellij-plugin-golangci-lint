@@ -36,9 +36,9 @@ dependencies {
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-    version '203.7717.56'
+    version '211.6693.111'
     type 'IU'
-    plugins = ['org.jetbrains.plugins.go:203.7717.11', 'com.intellij.plugins.watcher:203.6682.78']
+    plugins = ['org.jetbrains.plugins.go:211.6693.111', 'com.intellij.plugins.watcher:211.6693.44']
     intellij.updateSinceUntilBuild false
 }
 
@@ -54,8 +54,8 @@ compileTestKotlin {
     kotlinOptions.jvmTarget = "11"
 }
 
-static def changeLog() {
-    def all = new File('change-notes.htm').text
+def changeLog() {
+    def all = project.file('change-notes.htm').text
     def count = 0
     def idx = -1
 

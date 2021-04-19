@@ -41,13 +41,13 @@ open class GolintHandler : ProblemHandler() {
                         .flatMap { it.withIndex().map { iv -> if (iv.index == 0) iv.value else iv.value.toLowerCase() } }
                         .joinToString("")
 
-                    arrayOf(GoRenameToQuickFix(element, replace).toIntentionAction()) to element.identifier!!.textRange
+                    arrayOf<IntentionAction>(toIntentionAction(GoRenameToQuickFix(element, replace))) to element.identifier!!.textRange
                 }
             text.startsWith("type name will be used as ") || text.startsWith("func name will be used as ") -> {
                 val newName = text.substring(text.lastIndexOf(' ') + 1)
                 chainFindAndHandle(file, document, issue, overrideLine) { element: GoNamedElement ->
                     if (element.identifier!!.text.startsWith(element.containingFile.packageName ?: "", true))
-                        arrayOf(GoRenameToQuickFix(element, newName).toIntentionAction()) to element.identifier!!.textRange
+                        arrayOf<IntentionAction>(toIntentionAction(GoRenameToQuickFix(element, newName))) to element.identifier!!.textRange
                     else NonAvailableFix
                 }
             }
@@ -79,7 +79,7 @@ open class GolintHandler : ProblemHandler() {
                 chainFindAndHandle(file, document, issue, overrideLine) { element: GoMethodDeclaration ->
                     val receiver = element.receiver
                     if (receiver != null && receiver.identifier!!.text == curName) {
-                        arrayOf(GoRenameToQuickFix(receiver, newName).toIntentionAction()) to receiver.identifier?.textRange
+                        arrayOf<IntentionAction>(toIntentionAction(GoRenameToQuickFix(receiver, newName))) to receiver.identifier?.textRange
                     } else NonAvailableFix
                 }
             }
@@ -88,7 +88,7 @@ open class GolintHandler : ProblemHandler() {
                 if (match != null)
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoNamedElement ->
                         if (element.identifier?.text == match.groups[1]!!.value)
-                            arrayOf(GoRenameToQuickFix(element, match.groups[2]!!.value).toIntentionAction()) to element.identifier?.textRange
+                            arrayOf<IntentionAction>(toIntentionAction(GoRenameToQuickFix(element, match.groups[2]!!.value))) to element.identifier?.textRange
                         else NonAvailableFix
                     }
                 else
