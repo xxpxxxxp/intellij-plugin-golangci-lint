@@ -9,7 +9,6 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.impl.source.tree.PsiCommentImpl
-import com.ypwang.plugin.handler.GoCriticHandler.Handler
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.quickfix.*
 
@@ -28,11 +27,9 @@ object GoCriticHandler : ProblemHandler() {
     ) {
         add(root,
             word,
-            Handler {
-                    file,
-                    document,
-                    issue,
-                    overrideLine -> chainFindAndHandle<T>(file, document, issue, overrideLine) { handler.invoke(file, document, issue, overrideLine, it) }
+            object: Handler {
+                override fun handle(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<IntentionAction>, TextRange?> =
+                    chainFindAndHandle<T>(file, document, issue, overrideLine) { handler.invoke(file, document, issue, overrideLine, it) }
             }
         )
     }

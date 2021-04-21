@@ -44,7 +44,7 @@ private class GoLinterWorkLoad {
     var result: RunProcessResult? = null
 }
 
-class GoLinterLocalInspection : ExternalAnnotator<PsiFile, GoLinterLocalInspection.Result>() {
+class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnnotator.Result>() {
     companion object {
         private const val ErrorTitle = "Go linter running error"
         private const val notificationFrequencyCap = 60 * 1000L
@@ -82,17 +82,8 @@ class GoLinterLocalInspection : ExternalAnnotator<PsiFile, GoLinterLocalInspecti
      */
     private val cache = LRUMap<String, Pair<Long, List<LintIssue>>>(19)
 
-    open class RunningConf (
-        val runningPath: String,
-        val relativePath: String,
-        val cachePath: String,
-        val matchName: String
-    )
-
-    class Result (
-        val matchName: String,
-        val annotations: List<LintIssue>
-    )
+    private data class Tuple4<T1, T2, T3, T4>(val t1: T1, val t2: T2, val t3: T3, val t4: T4)
+    data class Result(val matchName: String, val annotations: List<LintIssue>)
 
     override fun collectInformation(file: PsiFile): PsiFile? =
         runReadAction {
@@ -105,7 +96,7 @@ class GoLinterLocalInspection : ExternalAnnotator<PsiFile, GoLinterLocalInspecti
     override fun doAnnotate(file: PsiFile): Result? {
         val project = file.project
         val absolutePath = Paths.get(file.virtualFile.path)     // file's absolute path
-        val conf =
+        val (runningPath, relativePath, cachePath, matchName) =
             if (GoLinterConfig.enableCustomProjectDir) {
                 // fallback to project base path
                 val projectPath = Paths.get(GoLinterConfig.customProjectDir.orElse(project.basePath!!))
@@ -116,7 +107,7 @@ class GoLinterLocalInspection : ExternalAnnotator<PsiFile, GoLinterLocalInspecti
 
                 val relative = projectPath.relativize(absolutePath.parent).toString()        // file's relative path to running dir
                 val fileName = projectPath.relativize(absolutePath).toString()               // file name
-                RunningConf(
+                Tuple4(
                     projectPath.toString(),
                     relative,
                     relative,
@@ -125,7 +116,7 @@ class GoLinterLocalInspection : ExternalAnnotator<PsiFile, GoLinterLocalInspecti
             } else {
                 val module = absolutePath.parent.toString()             // file's dir
                 val fileName = absolutePath.fileName.toString()         // file name
-                RunningConf(
+                Tuple4(
                     module,
                     ".",
                     module,
@@ -136,7 +127,7 @@ class GoLinterLocalInspection : ExternalAnnotator<PsiFile, GoLinterLocalInspecti
         run {
             // see if cached
             val issueWithTTL = synchronized(cache) {
-                cache[conf.cachePath]
+                cache[cachePath]
             }
 
             if (
@@ -146,19 +137,19 @@ class GoLinterLocalInspection : ExternalAnnotator<PsiFile, GoLinterLocalInspecti
                 !isSaved(file) ||
                 // cached result is newer than both last config saved time and this file's last modified time
                 (issueWithTTL != null && file.virtualFile.timeStamp < issueWithTTL.first && GoLinterSettings.getLastSavedTime() < issueWithTTL.first))
-                return Result(conf.matchName, issueWithTTL?.second ?: listOf())
+                return Result(matchName, issueWithTTL?.second ?: listOf())
         }
 
         // cache not found or outdated
         // ====================================================================================================================================
         return try {
-            val params = buildParameters(file, project, conf.relativePath)
-            val issues = runAndProcessResult(project, conf.runningPath, params, mapOf("PATH" to getSystemPath(project), "GOPATH" to getGoPath(project)))
+            val params = buildParameters(file, project, relativePath)
+            val issues = runAndProcessResult(project, runningPath, params, mapOf("PATH" to getSystemPath(project), "GOPATH" to getGoPath(project)))
             synchronized(cache) {
-                cache[conf.cachePath] = System.currentTimeMillis() to issues
+                cache[cachePath] = System.currentTimeMillis() to issues
             }
 
-            Result(conf.matchName, issues)
+            Result(matchName, issues)
         } catch (e: Exception) {
             null
         }
@@ -420,7 +411,7 @@ class GoLinterLocalInspection : ExternalAnnotator<PsiFile, GoLinterLocalInspecti
                         processResult.stderr.contains("Can't read config") ->
                             notificationGroup.createNotification(
                                     ErrorTitle,
-                                    "invalid format of config file",
+                                    "Invalid format of config file",
                                     NotificationType.ERROR,
                                     null as NotificationListener?).apply {
                                 // find the config file
@@ -437,7 +428,7 @@ class GoLinterLocalInspection : ExternalAnnotator<PsiFile, GoLinterLocalInspecti
                         processResult.stderr.contains("all linters were disabled, but no one linter was enabled") ->
                             notificationGroup.createNotification(
                                     ErrorTitle,
-                                    "must enable at least one linter",
+                                    "Must enable at least one linter",
                                     NotificationType.ERROR,
                                     null as NotificationListener?).apply {
                                 this.addAction(NotificationAction.createSimple("Configure") {
@@ -459,7 +450,7 @@ class GoLinterLocalInspection : ExternalAnnotator<PsiFile, GoLinterLocalInspecti
                         processResult.stderr.contains("error computing diff") ->
                             notificationGroup.createNotification(
                                     ErrorTitle,
-                                    "diff is needed for running gofmt/goimports/gci. Either put <a href=\"http://ftp.gnu.org/gnu/diffutils/\">GNU diff</a> & <a href=\"https://ftp.gnu.org/pub/gnu/libiconv/\">GNU LibIconv</a> binary in PATH, or disable gofmt/goimports.",
+                                    "Diff is needed for running gofmt/goimports/gci. Either put <a href=\"https://ftp.gnu.org/gnu/diffutils/\">GNU diff</a> & <a href=\"https://ftp.gnu.org/pub/gnu/libiconv/\">GNU LibIconv</a> binary in PATH, or disable gofmt/goimports.",
                                     NotificationType.ERROR,
                                     NotificationListener.URL_OPENING_LISTENER).apply {
                                 this.addAction(NotificationAction.createSimple("Configure") {

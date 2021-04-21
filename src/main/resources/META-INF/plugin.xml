@@ -24,6 +24,6 @@
     <extensions defaultExtensionNs="com.intellij">
         <projectConfigurable groupId="tools" displayName="Go Linter" id="preference.GoLinterConfigurable" instance="com.ypwang.plugin.form.GoLinterSettings" />
         <postStartupActivity implementation="com.ypwang.plugin.GoLinterSettingsTracker"/>
-        <externalAnnotator language="go" implementationClass="com.ypwang.plugin.GoLinterLocalInspection"/>
+        <externalAnnotator language="go" implementationClass="com.ypwang.plugin.GoLinterExternalAnnotator"/>
     </extensions>
 </idea-plugin>
