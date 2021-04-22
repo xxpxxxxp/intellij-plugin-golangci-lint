@@ -1,11 +1,5 @@
 package com.ypwang.plugin.handler
 
-import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
-import com.intellij.codeInspection.LocalQuickFixOnPsiElement
-import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.project.Project
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiFile
 import java.util.*
 
 fun extractQuote(s: String, count: Int = 1): List<String> {
@@ -24,15 +18,6 @@ fun extractQuote(s: String, count: Int = 1): List<String> {
 
     return rst
 }
-
-fun toIntentionAction(fix: LocalQuickFixOnPsiElement): LocalQuickFixAndIntentionActionOnPsiElement =
-    object : LocalQuickFixAndIntentionActionOnPsiElement(fix.startElement, fix.endElement) {
-        override fun getFamilyName(): String = fix.familyName
-        override fun getText(): String = fix.text
-        override fun invoke(project: Project, file: PsiFile, editor: Editor?, startElement: PsiElement, endElement: PsiElement) {
-            fix.invoke(project, file, startElement, endElement)
-        }
-    }
 
 // speed up pattern matching by word tree
 // due to the special need of our matching, we will not have dup words, and a word must not start with another word

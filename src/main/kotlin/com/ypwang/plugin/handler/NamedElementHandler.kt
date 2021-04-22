@@ -5,6 +5,7 @@ import com.goide.psi.*
 import com.goide.quickfix.GoDeleteRangeQuickFix
 import com.goide.quickfix.GoRenameToBlankQuickFix
 import com.intellij.codeInsight.intention.IntentionAction
+import com.intellij.codeInspection.LocalQuickFixOnPsiElementAsIntentionAdapter
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
@@ -35,14 +36,14 @@ object NamedElementHandler : ProblemHandler() {
                         } else arrayOf()
                     }
                     is GoFunctionDeclaration ->
-                        arrayOf<IntentionAction>(GoDeleteElementFix(element, "Delete function"), toIntentionAction(GoRenameToBlankQuickFix(element)))
+                        arrayOf(GoDeleteElementFix(element, "Delete function"), LocalQuickFixOnPsiElementAsIntentionAdapter(GoRenameToBlankQuickFix(element)))
                     is GoTypeSpec ->
                         arrayOf<IntentionAction>(GoDeleteElementFix(element, "Delete type"))
                     is GoVarDefinition ->
-                        (if (GoInspectionUtil.canDeleteDefinition(element)) arrayOf<IntentionAction>(toIntentionAction(GoRenameToBlankQuickFix(element)), GoDeleteVarDefinitionFix(element))
-                        else arrayOf<IntentionAction>(toIntentionAction(GoRenameToBlankQuickFix(element))))
+                        (if (GoInspectionUtil.canDeleteDefinition(element)) arrayOf(LocalQuickFixOnPsiElementAsIntentionAdapter(GoRenameToBlankQuickFix(element)), GoDeleteVarDefinitionFix(element))
+                        else arrayOf<IntentionAction>(LocalQuickFixOnPsiElementAsIntentionAdapter(GoRenameToBlankQuickFix(element))))
                     is GoConstDefinition ->
-                        (if (GoInspectionUtil.canDeleteDefinition(element)) arrayOf<IntentionAction>(toIntentionAction(GoDeleteConstDefinitionFix(element))) else arrayOf())
+                        (if (GoInspectionUtil.canDeleteDefinition(element)) arrayOf<IntentionAction>(LocalQuickFixOnPsiElementAsIntentionAdapter(GoDeleteConstDefinitionFix(element))) else arrayOf())
                     is GoMethodDeclaration ->
                         arrayOf<IntentionAction>(GoDeleteElementFix(element, "Delete method"))
                     else -> EmptyLocalQuickFix

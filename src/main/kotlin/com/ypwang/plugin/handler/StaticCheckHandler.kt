@@ -6,6 +6,7 @@ import com.goide.psi.GoReferenceExpression
 import com.goide.psi.GoStatement
 import com.goide.quickfix.GoRenameToBlankQuickFix
 import com.intellij.codeInsight.intention.IntentionAction
+import com.intellij.codeInspection.LocalQuickFixOnPsiElementAsIntentionAdapter
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
@@ -31,7 +32,7 @@ object StaticCheckHandler : ProblemHandler() {
                 // argument xxx is overwritten before first use
                 "SA4009" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoParamDefinition ->
-                        arrayOf<IntentionAction>(toIntentionAction(GoRenameToBlankQuickFix(element))) to element.identifier.textRange
+                        arrayOf<IntentionAction>(LocalQuickFixOnPsiElementAsIntentionAdapter(GoRenameToBlankQuickFix(element))) to element.identifier.textRange
                     }
                 // file mode '777' evaluates to 01411; did you mean '0777'?"
                 "SA9002" ->

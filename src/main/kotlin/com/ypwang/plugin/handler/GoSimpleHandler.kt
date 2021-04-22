@@ -5,8 +5,10 @@ import com.goide.quickfix.GoDeleteRangeQuickFix
 import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiWhiteSpace
+import com.intellij.psi.impl.source.tree.PsiWhiteSpaceImpl
 import com.intellij.refactoring.suggested.endOffset
 import com.intellij.refactoring.suggested.startOffset
 import com.ypwang.plugin.model.LintIssue
@@ -117,8 +119,13 @@ object GoSimpleHandler : ProblemHandler() {
                 // redundant `return` statement
                 "S1023" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoReturnStatement ->
-                        if (element.expressionList.isEmpty())
-                            arrayOf<IntentionAction>(GoDeleteRangeQuickFix(element, element.nextSibling, "Remove redundant 'return'")) to element.textRange
+                        if (element.expressionList.isEmpty()) {
+                            var start: PsiElement = element.prevSibling
+                            while (start !is PsiWhiteSpaceImpl || start.text != "\n")
+                                start = start.prevSibling
+
+                            arrayOf<IntentionAction>(GoDeleteRangeQuickFix(start, element, "Remove redundant 'return'")) to element.textRange
+                        }
                         else NonAvailableFix
                     }
                 // should use w.buff.String() instead of string(w.buff.Bytes())

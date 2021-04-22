@@ -4,6 +4,7 @@ import com.goide.psi.*
 import com.goide.psi.impl.GoElementFactory
 import com.goide.quickfix.GoRenameToQuickFix
 import com.intellij.codeInsight.intention.IntentionAction
+import com.intellij.codeInspection.LocalQuickFixOnPsiElementAsIntentionAdapter
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
@@ -63,7 +64,7 @@ object GoCriticHandler : ProblemHandler() {
             addHandler(this, "captLocal:") { _, _, _, _, element: GoParamDefinition ->
                 val text = element.identifier.text
                 if (text[0].isUpperCase())
-                    arrayOf<IntentionAction>(toIntentionAction(GoRenameToQuickFix(element, text[0].toLowerCase() + text.substring(1)))) to element.identifier.textRange
+                    arrayOf<IntentionAction>(LocalQuickFixOnPsiElementAsIntentionAdapter(GoRenameToQuickFix(element, text[0].toLowerCase() + text.substring(1)))) to element.identifier.textRange
                 else NonAvailableFix
             }
 

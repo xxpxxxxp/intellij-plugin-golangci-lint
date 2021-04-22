@@ -7,6 +7,7 @@ import com.goide.quickfix.GoDeleteRangeQuickFix
 import com.goide.quickfix.GoRenameToQuickFix
 import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
+import com.intellij.codeInspection.LocalQuickFixOnPsiElementAsIntentionAdapter
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
@@ -57,7 +58,7 @@ object WhitespaceHandler : ProblemHandler() {
         val elements = mutableListOf<PsiElement>()
         val shift = overrideLine - issue.Pos.Line
         // whitespace linter tells us the start line and end line
-        for (l in issue.LineRange!!.To downTo issue.LineRange.From) {
+        for (l in issue.LineRange!!.From..issue.LineRange.To) {
             val line = l + shift
             // line in document starts from 0
             val s = document.getLineStartOffset(line)
@@ -72,9 +73,13 @@ object WhitespaceHandler : ProblemHandler() {
 
         val start = document.getLineStartOffset(issue.LineRange.From + shift)
         val end = document.getLineEndOffset(issue.LineRange.To + shift)
-        if (elements.isNotEmpty()) return arrayOf<IntentionAction>(GoDeleteRangeQuickFix(elements.first(), elements.last(), "Remove whitespace")) to TextRange(start, end)
-
-        return NonAvailableFix
+        return when (elements.size) {
+            0 -> NonAvailableFix
+            1 ->
+                arrayOf<IntentionAction>(GoDeleteElementFix(elements.single(), "Remove whitespace")) to TextRange(start, end)
+            else ->
+                arrayOf<IntentionAction>(GoDeleteRangeQuickFix(elements.first(), elements.last(), "Remove whitespace")) to TextRange(start, end)
+        }
     }
 }
 
@@ -104,7 +109,7 @@ object TestPackageHandler : ProblemHandler() {
 object GoPrintfFuncNameHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<IntentionAction>, TextRange?> =
             chainFindAndHandle(file, document, issue, overrideLine) { element: GoFunctionOrMethodDeclaration ->
-                arrayOf<IntentionAction>(toIntentionAction(GoRenameToQuickFix(element, "${element.identifier!!.text}f"))) to element.identifier!!.textRange
+                arrayOf<IntentionAction>(LocalQuickFixOnPsiElementAsIntentionAdapter(GoRenameToQuickFix(element, "${element.identifier!!.text}f"))) to element.identifier!!.textRange
             }
 }
 

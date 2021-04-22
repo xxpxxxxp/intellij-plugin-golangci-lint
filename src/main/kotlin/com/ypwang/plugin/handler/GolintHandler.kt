@@ -3,6 +3,7 @@ package com.ypwang.plugin.handler
 import com.goide.psi.*
 import com.goide.quickfix.GoRenameToQuickFix
 import com.intellij.codeInsight.intention.IntentionAction
+import com.intellij.codeInspection.LocalQuickFixOnPsiElementAsIntentionAdapter
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
@@ -41,13 +42,13 @@ open class GolintHandler : ProblemHandler() {
                         .flatMap { it.withIndex().map { iv -> if (iv.index == 0) iv.value else iv.value.toLowerCase() } }
                         .joinToString("")
 
-                    arrayOf<IntentionAction>(toIntentionAction(GoRenameToQuickFix(element, replace))) to element.identifier!!.textRange
+                    arrayOf<IntentionAction>(LocalQuickFixOnPsiElementAsIntentionAdapter(GoRenameToQuickFix(element, replace))) to element.identifier!!.textRange
                 }
             text.startsWith("type name will be used as ") || text.startsWith("func name will be used as ") -> {
                 val newName = text.substring(text.lastIndexOf(' ') + 1)
                 chainFindAndHandle(file, document, issue, overrideLine) { element: GoNamedElement ->
                     if (element.identifier!!.text.startsWith(element.containingFile.packageName ?: "", true))
-                        arrayOf<IntentionAction>(toIntentionAction(GoRenameToQuickFix(element, newName))) to element.identifier!!.textRange
+                        arrayOf<IntentionAction>(LocalQuickFixOnPsiElementAsIntentionAdapter(GoRenameToQuickFix(element, newName))) to element.identifier!!.textRange
                     else NonAvailableFix
                 }
             }
@@ -57,16 +58,20 @@ open class GolintHandler : ProblemHandler() {
                 }
             text.startsWith("should replace") -> {
                 chainFindAndHandle(file, document, issue, overrideLine) { element: GoAssignmentStatement ->
-                    val extracted = extractQuote(issue.Text, 2)
-                    if (extracted.size == 2 && element.text == extracted[0]) {
-                        extracted[1].let {
-                            if (it.endsWith("++") || it.endsWith("--"))
-                                arrayOf<IntentionAction>(GoReplaceElementFix(it, element, GoIncDecStatement::class.java)) to element.textRange
-                            else
-                                arrayOf<IntentionAction>(GoReplaceElementFix(it, element, GoAssignmentStatement::class.java)) to element.textRange
+                    val match = Regex("should replace (.+) with (.+)").matchEntire(text)
+                    if (match != null) {
+                        val (_, pre, replace) = match.groupValues
+                        if (pre == element.text) {
+                            return@chainFindAndHandle replace.let {
+                                if (it.endsWith("++") || it.endsWith("--"))
+                                    arrayOf<IntentionAction>(GoReplaceElementFix(it, element, GoIncDecStatement::class.java)) to element.textRange
+                                else
+                                    arrayOf<IntentionAction>(GoReplaceElementFix(it, element, GoAssignmentStatement::class.java)) to element.textRange
+                            }
                         }
-                    } else
-                        NonAvailableFix
+                    }
+
+                    NonAvailableFix
                 }
             }
             text.startsWith("receiver name ") -> {
@@ -79,7 +84,7 @@ open class GolintHandler : ProblemHandler() {
                 chainFindAndHandle(file, document, issue, overrideLine) { element: GoMethodDeclaration ->
                     val receiver = element.receiver
                     if (receiver != null && receiver.identifier!!.text == curName) {
-                        arrayOf<IntentionAction>(toIntentionAction(GoRenameToQuickFix(receiver, newName))) to receiver.identifier?.textRange
+                        arrayOf<IntentionAction>(LocalQuickFixOnPsiElementAsIntentionAdapter(GoRenameToQuickFix(receiver, newName))) to receiver.identifier?.textRange
                     } else NonAvailableFix
                 }
             }
@@ -88,7 +93,7 @@ open class GolintHandler : ProblemHandler() {
                 if (match != null)
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoNamedElement ->
                         if (element.identifier?.text == match.groups[1]!!.value)
-                            arrayOf<IntentionAction>(toIntentionAction(GoRenameToQuickFix(element, match.groups[2]!!.value))) to element.identifier?.textRange
+                            arrayOf<IntentionAction>(LocalQuickFixOnPsiElementAsIntentionAdapter(GoRenameToQuickFix(element, match.groups[2]!!.value))) to element.identifier?.textRange
                         else NonAvailableFix
                     }
                 else
