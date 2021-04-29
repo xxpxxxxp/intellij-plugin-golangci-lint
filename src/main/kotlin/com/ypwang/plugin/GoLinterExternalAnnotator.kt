@@ -105,12 +105,12 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                     // file is not in current Go project, skip
                     return null
 
-                val relative = projectPath.relativize(absolutePath.parent).toString()        // file's relative path to running dir
-                val fileName = projectPath.relativize(absolutePath).toString()               // file name
+                val relative = projectPath.relativize(absolutePath.parent).toString().ifBlank { "." }   // file's relative path to running dir
+                val fileName = projectPath.relativize(absolutePath).toString()                          // file name
                 Tuple4(
                     projectPath.toString(),
                     relative,
-                    relative,
+                    absolutePath.parent.toString(),
                     fileName
                 )
             } else {
