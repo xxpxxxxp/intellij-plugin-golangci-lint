@@ -36,9 +36,9 @@ dependencies {
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-    version '211.6693.111'
+    version '211.7142.45'
     type 'IU'
-    plugins = ['org.jetbrains.plugins.go:211.6693.111', 'com.intellij.plugins.watcher:211.6693.44']
+    plugins = ['org.jetbrains.plugins.go:211.7142.36', 'com.intellij.plugins.watcher:211.6693.44']
     intellij.updateSinceUntilBuild false
 }
 

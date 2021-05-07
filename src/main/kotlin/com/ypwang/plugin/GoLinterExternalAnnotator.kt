@@ -85,6 +85,8 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
     private data class Tuple4<T1, T2, T3, T4>(val t1: T1, val t2: T2, val t3: T3, val t4: T4)
     data class Result(val matchName: String, val annotations: List<LintIssue>)
 
+    override fun getPairedBatchInspectionShortName(): String = GoLinterLocalInspection.SHORT_NAME
+
     override fun collectInformation(file: PsiFile): PsiFile? =
         runReadAction {
             if (file.isValid && file.virtualFile != null && file is GoFile && File(GoLinterConfig.goLinterExe).canExecute()/* valid linter executable */)

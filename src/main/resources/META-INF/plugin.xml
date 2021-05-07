@@ -25,5 +25,9 @@
         <projectConfigurable groupId="tools" displayName="Go Linter" id="preference.GoLinterConfigurable" instance="com.ypwang.plugin.form.GoLinterSettings" />
         <postStartupActivity implementation="com.ypwang.plugin.GoLinterSettingsTracker"/>
         <externalAnnotator language="go" implementationClass="com.ypwang.plugin.GoLinterExternalAnnotator"/>
+        <localInspection language="go" shortName="GoLinter" enabledByDefault="true"
+                         displayName="Golangci-Lint" groupPath="Go" id="GoLinter"
+                         groupName="General"  level="WARNING" unfair="true"
+                         implementationClass="com.ypwang.plugin.GoLinterLocalInspection"/>
     </extensions>
 </idea-plugin>
