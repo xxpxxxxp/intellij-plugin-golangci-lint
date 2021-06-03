@@ -64,7 +64,7 @@ object GoCriticHandler : ProblemHandler() {
             addHandler(this, "captLocal:") { _, _, _, _, element: GoParamDefinition ->
                 val text = element.identifier.text
                 if (text[0].isUpperCase())
-                    arrayOf<IntentionAction>(LocalQuickFixOnPsiElementAsIntentionAdapter(GoRenameToQuickFix(element, text[0].toLowerCase() + text.substring(1)))) to element.identifier.textRange
+                    arrayOf<IntentionAction>(LocalQuickFixOnPsiElementAsIntentionAdapter(GoRenameToQuickFix(element, text[0].lowercaseChar() + text.substring(1)))) to element.identifier.textRange
                 else NonAvailableFix
             }
 

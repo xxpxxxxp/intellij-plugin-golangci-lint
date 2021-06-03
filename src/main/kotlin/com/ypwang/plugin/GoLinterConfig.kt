@@ -2,7 +2,7 @@ package com.ypwang.plugin
 
 import com.intellij.ide.util.PropertiesComponent
 import org.jetbrains.annotations.NotNull
-import java.util.Optional
+import java.util.*
 
 object GoLinterConfig {
     private const val GO_LINTER_EXE = "golangci-lint"
