@@ -16,7 +16,7 @@ class GoFumportsTaskConsumer : GoToolTaskConsumer() {
         return createDefaultOptions().apply {
             this.name = "gofumports"
             this.description = "Runs `$EXECUTABLE_NAME` on current Go file directory"
-            this.program = EXECUTABLE_NAME;
+            this.program = EXECUTABLE_NAME
             this.arguments = "-w $${FilePathMacro().name}$"
             this.output = "$${FilePathMacro().name}$"
         }

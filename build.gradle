@@ -1,7 +1,7 @@
 plugins {
     id 'java'
-    id 'org.jetbrains.intellij' version '0.7.3'
-    id 'org.jetbrains.kotlin.jvm' version '1.4.32'
+    id 'org.jetbrains.intellij' version '1.0'
+    id 'org.jetbrains.kotlin.jvm' version '1.5.10'
 }
 
 static def gitTag() {
@@ -36,10 +36,10 @@ dependencies {
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-    version '211.7142.45'
-    type 'IU'
-    plugins = ['org.jetbrains.plugins.go:211.7142.36', 'com.intellij.plugins.watcher:211.6693.44']
-    intellij.updateSinceUntilBuild false
+    version = '211.7442.40'
+    type = 'IU'
+    plugins = ['org.jetbrains.plugins.go:211.7442.27', 'com.intellij.plugins.watcher:211.6693.44']
+    updateSinceUntilBuild = false
 }
 
 compileKotlin {
@@ -72,12 +72,12 @@ def changeLog() {
 }
 
 patchPluginXml {
-    changeNotes changeLog()
+    changeNotes = changeLog()
 }
 
 publishPlugin {
     token = System.getenv("ORG_GRADLE_PROJECT_intellijPublishToken")
-    channels channel
+    channels = [channel]
 }
 
 runIde {

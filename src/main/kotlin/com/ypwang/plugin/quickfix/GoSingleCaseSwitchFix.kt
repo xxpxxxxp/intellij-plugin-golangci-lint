@@ -21,7 +21,7 @@ class GoSingleCaseSwitchFix(element: GoSwitchStatement)
                 val caseClause = element.typeCaseClauseList.single()
                 val cond = element.typeSwitchGuard
 
-                val varName = cond.varDefinition?.let { it.text }?: "_"
+                val varName = cond.varDefinition?.text ?: "_"
                 assert(cond.expression.text.endsWith(".(type)"))
 
                 element.replace(GoElementFactory.createIfStatement(

@@ -1,6 +1,7 @@
 package com.ypwang.plugin.quickfix
 
-import com.goide.psi.*
+import com.goide.psi.GoConstDefinition
+import com.goide.psi.GoConstSpec
 import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project

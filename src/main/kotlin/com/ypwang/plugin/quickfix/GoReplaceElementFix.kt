@@ -2,7 +2,6 @@ package com.ypwang.plugin.quickfix
 
 import com.goide.psi.GoExpression
 import com.goide.psi.GoStatement
-import com.goide.psi.GoStringLiteral
 import com.goide.psi.impl.GoElementFactory
 import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
 import com.intellij.openapi.editor.Editor
