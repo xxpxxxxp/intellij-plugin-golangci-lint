@@ -1,7 +1,7 @@
 plugins {
     id 'java'
-    id 'org.jetbrains.intellij' version '1.0'
-    id 'org.jetbrains.kotlin.jvm' version '1.5.10'
+    id 'org.jetbrains.intellij' version '1.1.2'
+    id 'org.jetbrains.kotlin.jvm' version '1.5.20'
 }
 
 static def gitTag() {
@@ -36,9 +36,9 @@ dependencies {
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-    version = '211.7442.40'
+    version = '211.7628.21'
     type = 'IU'
-    plugins = ['org.jetbrains.plugins.go:211.7442.27', 'com.intellij.plugins.watcher:211.6693.44']
+    plugins = ['org.jetbrains.plugins.go:211.7628.1', 'com.intellij.plugins.watcher:211.6693.44']
     updateSinceUntilBuild = false
 }
 

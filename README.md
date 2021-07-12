@@ -7,18 +7,15 @@
 
 # Intellij/Goland Linter Inspection Plugin
 
-Write code, write better code
-
+Write code, write better code  
 All credit goes to [GolangCI-Lint authors](https://github.com/golangci/golangci-lint/graphs/contributors).
 
-A lot of code pieces copied from [clion-clangtidy](https://bitbucket.org/baldur/clion-clangtidy/src/default/), [kotlin](https://github.com/JetBrains/kotlin), and [Goland plugin](https://plugins.jetbrains.com/plugin/9568-go) itself.
-
 ## How to use
-After the plugin installed, you can see a popup on IDEA startup, or go to settings directly:
+After the plugin installed, you will see a popup on IDEA startup, otherwise please go to settings manually:
 
 ![](explanation/init.png)
 
-A **golangci-lint** executable is needed. Choose one from combobox if you already have it in your PATH, or `Open...` select one from disk, or `Get Latest` download one from Github release.  
+A **golangci-lint** executable is required. Choose one from combobox if you already have it in your PATH, or `Open...` select one from disk, or `Get Latest` download one from Github release.  
 
 If you have your own `.golangci.json`|`.golangci.toml`|`.golangci.yaml`|`.golangci.yml` config file, the plugin will detect and use it.  
 Otherwise, select linters you need:
@@ -47,6 +44,5 @@ Please disable goimports / gofmt / gci linters. Use [File-Watcher](https://tech.
 * Please note down your platform (Win/Linux/Mac), IDEA/Goland version, Go version
 * If the plugin reports an error, please copy-paste the error content
 
-## What's next
-* Performance improvement
+## Next
 * Code quality improvement

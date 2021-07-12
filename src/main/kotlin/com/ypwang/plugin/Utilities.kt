@@ -118,6 +118,7 @@ fun getPlatformSpecificBinName(meta: GithubRelease): String {
         when (it) {
             "x86" -> "386"
             "amd64", "x86_64" -> "amd64"
+            "aarch64" -> "arm64"
             else -> throw Exception("Unknown system arch: $it")
         }
     }
