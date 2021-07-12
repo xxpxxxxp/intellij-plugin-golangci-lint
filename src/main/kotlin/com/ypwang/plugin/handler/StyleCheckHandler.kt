@@ -10,7 +10,6 @@ import com.ypwang.plugin.quickfix.GoRemoveDuplImportFix
 import com.ypwang.plugin.quickfix.GoReplaceStringFix
 import com.ypwang.plugin.quickfix.GoSwapBinaryExprFix
 import org.apache.commons.lang.StringEscapeUtils
-import java.util.*
 
 object StyleCheckHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<IntentionAction>, TextRange?> =
@@ -20,7 +19,7 @@ object StyleCheckHandler : ProblemHandler() {
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoCallExpr ->
                         val formatString = element.argumentList.expressionList.first()
                         if (formatString is GoStringLiteral) arrayOf<IntentionAction>(GoReplaceStringFix("Decapitalize string", formatString){
-                            "\"${StringEscapeUtils.escapeJava(it.replaceFirstChar { c -> c.lowercase(Locale.getDefault()) })}\""
+                            "\"${StringEscapeUtils.escapeJava(it.decapitalize())}\""
                         }) to formatString.textRange
                         else NonAvailableFix
                     }
@@ -42,7 +41,7 @@ object StyleCheckHandler : ProblemHandler() {
                             val hex = utfChar.substring(2).toInt(16)
                             val sb = StringBuilder()
                             for (c in it) {
-                                if (c.code == hex) sb.append("\\u${c.code.toString(16)}")
+                                if (c.toInt() == hex) sb.append("\\u${c.toInt().toString(16)}")
                                 else sb.append(c)
                             }
                             "\"$sb\""
