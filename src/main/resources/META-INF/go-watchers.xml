@@ -1,6 +1,0 @@
-<idea-plugin>
-    <extensions defaultExtensionNs="com.intellij.plugins.watcher">
-        <consumer implementation="com.ypwang.plugin.watchers.GoFumptTaskConsumer"/>
-        <consumer implementation="com.ypwang.plugin.watchers.GoFumportsTaskConsumer"/>
-    </extensions>
-</idea-plugin>

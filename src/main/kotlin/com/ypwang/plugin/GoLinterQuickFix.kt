@@ -21,7 +21,6 @@ val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "goprintffuncname" to GoPrintfFuncNameHandler,
 //        "exhaustive" to ExhaustiveHandler,    // exhaustive is error prone
         "gosimple" to GoSimpleHandler,
-        "gofumpt" to GoFumptHandler,
         "scopelint" to explanationHandler("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/scopelint.md"),
         "goerr113" to explanationHandler("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/goerr113.md"),
         "exportloopref" to explanationHandler("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/exportloopref.md"),

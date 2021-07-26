@@ -9,6 +9,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.quickfix.*
+import java.util.*
 
 open class GolintHandler : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<IntentionAction>, TextRange?> =
@@ -39,7 +40,7 @@ open class GolintHandler : ProblemHandler() {
                     // to CamelCase
                     val replace = element.identifier!!.text
                         .split('_')
-                        .flatMap { it.withIndex().map { iv -> if (iv.index == 0) iv.value else iv.value.toLowerCase() } }
+                        .flatMap { it.withIndex().map { iv -> if (iv.index == 0) iv.value else iv.value.lowercaseChar() } }
                         .joinToString("")
 
                     arrayOf<IntentionAction>(LocalQuickFixOnPsiElementAsIntentionAdapter(GoRenameToQuickFix(element, replace))) to element.identifier!!.textRange
@@ -54,7 +55,9 @@ open class GolintHandler : ProblemHandler() {
             }
             text.startsWith("don't use MixedCaps in package name") ->
                 chainFindAndHandle(file, document, issue, overrideLine) { element: GoPackageClause ->
-                    arrayOf<IntentionAction>(GoRenamePackageFix(element, element.identifier!!.text.toLowerCase())) to element.identifier!!.textRange
+                    arrayOf<IntentionAction>(GoRenamePackageFix(element,
+                        element.identifier!!.text.lowercase(Locale.getDefault())
+                    )) to element.identifier!!.textRange
                 }
             text.startsWith("should replace") -> {
                 chainFindAndHandle(file, document, issue, overrideLine) { element: GoAssignmentStatement ->

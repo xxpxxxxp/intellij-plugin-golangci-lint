@@ -26,7 +26,7 @@ class GoRemoveDuplImportFix(element: GoImportSpec)
                     val pathBreak = defaultImport.path.lastIndexOf('/')
                     defaultImport.path.substring(pathBreak + 1) to dups.filter { it.alias != null }
                 } else {
-                    element.alias to dups.filter { it.alias != element.alias }
+                    element.alias!! to dups.filter { it.alias != element.alias }
                 }
 
             for (goImport in others) {

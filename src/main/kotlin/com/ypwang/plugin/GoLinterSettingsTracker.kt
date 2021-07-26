@@ -35,9 +35,8 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
         notificationGroup.createNotification(
                 "Configure golangci-lint",
                 "golangci-lint executable is needed for linter inspection work. <a href=\"https://github.com/xxpxxxxp/intellij-plugin-golangci-lint\">Checkout guide</a>",
-                NotificationType.INFORMATION,
-                NotificationListener.URL_OPENING_LISTENER
-        ).apply {
+                NotificationType.INFORMATION).apply {
+            this.setListener(NotificationListener.URL_OPENING_LISTENER)
             this.addAction(NotificationAction.createSimple("Configure") {
                 ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
                 this.expire()
@@ -90,8 +89,9 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
         notificationGroup.createNotification(
                 title,
                 "Download <a href=\"$url\">${latestMeta.name}</a> in browser",
-                NotificationType.INFORMATION,
-                NotificationListener.URL_OPENING_LISTENER).apply {
+                NotificationType.INFORMATION).apply {
+            this.setListener(NotificationListener.URL_OPENING_LISTENER)
+
             val file = File(GoLinterConfig.goLinterExe)
             if (file.canWrite()) {
                 // provide update action

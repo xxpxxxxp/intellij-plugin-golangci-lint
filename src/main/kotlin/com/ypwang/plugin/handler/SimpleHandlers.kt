@@ -12,7 +12,6 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
-import com.intellij.plugins.watcher.config.WatchersConfigurable
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiWhiteSpace
@@ -141,11 +140,6 @@ object NlReturnHandler : ProblemHandler() {
             }) to file.findElementAt(calcPos(document, issue, overrideLine))?.textRange
         } else NonAvailableFix
     }
-}
-
-object GoFumptHandler : ProblemHandler() {
-    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<IntentionAction>, TextRange?> =
-            arrayOf<IntentionAction>(GoOpenConfigurable("Config File Watchers") { WatchersConfigurable(it) }) to null
 }
 
 // just fit range

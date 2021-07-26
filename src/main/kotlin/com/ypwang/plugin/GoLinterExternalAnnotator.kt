@@ -414,8 +414,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                             notificationGroup.createNotification(
                                     ErrorTitle,
                                     "Invalid format of config file",
-                                    NotificationType.ERROR,
-                                    null as NotificationListener?).apply {
+                                    NotificationType.ERROR).apply {
                                 // find the config file
                                 findCustomConfigInPath(project.basePath!!).ifPresent {
                                     val configFile = File(it)
@@ -431,8 +430,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                             notificationGroup.createNotification(
                                     ErrorTitle,
                                     "Must enable at least one linter",
-                                    NotificationType.ERROR,
-                                    null as NotificationListener?).apply {
+                                    NotificationType.ERROR).apply {
                                 this.addAction(NotificationAction.createSimple("Configure") {
                                     ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
                                     this.expire()
@@ -442,8 +440,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                             notificationGroup.createNotification(
                                     ErrorTitle,
                                     "'GOROOT' must be set",
-                                    NotificationType.ERROR,
-                                    null as NotificationListener?).apply {
+                                    NotificationType.ERROR).apply {
                                 this.addAction(NotificationAction.createSimple("Setup GOROOT") {
                                     ShowSettingsUtil.getInstance().editConfigurable(project, GoSdkConfigurable(project, true))
                                     this.expire()
@@ -453,8 +450,8 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                             notificationGroup.createNotification(
                                     ErrorTitle,
                                     "Diff is needed for running gofmt/goimports/gci. Either put <a href=\"https://ftp.gnu.org/gnu/diffutils/\">GNU diff</a> & <a href=\"https://ftp.gnu.org/pub/gnu/libiconv/\">GNU LibIconv</a> binary in PATH, or disable gofmt/goimports.",
-                                    NotificationType.ERROR,
-                                    NotificationListener.URL_OPENING_LISTENER).apply {
+                                    NotificationType.ERROR).apply {
+                                this.setListener(NotificationListener.URL_OPENING_LISTENER)
                                 this.addAction(NotificationAction.createSimple("Configure") {
                                     ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
                                     this.expire()
@@ -464,8 +461,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                             notificationGroup.createNotification(
                                     ErrorTitle,
                                     "Please make sure there's no syntax error, then check if any config error",
-                                    NotificationType.ERROR,
-                                    null as NotificationListener?).apply {
+                                    NotificationType.ERROR).apply {
                                 this.addAction(NotificationAction.createSimple("Configure") {
                                     ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
                                     this.expire()

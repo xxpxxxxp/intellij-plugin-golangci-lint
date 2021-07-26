@@ -7,6 +7,7 @@ import com.google.common.io.CharStreams
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
 import com.intellij.notification.NotificationGroup
+import com.intellij.notification.NotificationGroupManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
@@ -34,7 +35,7 @@ private val systemPath = System.getenv("PATH")
 private val systemGoPath = System.getenv("GOPATH")      // immutable in current idea process
 
 val logger = Logger.getInstance("go-linter")
-val notificationGroup = NotificationGroup.findRegisteredGroup(notificationGroupName) ?: NotificationGroup.balloonGroup(notificationGroupName)
+val notificationGroup: NotificationGroup = NotificationGroupManager.getInstance().getNotificationGroup(notificationGroupName)
 val linterExecutableName = if (SystemInfo.isWindows) "$LinterName.exe" else LinterName
 val executionDir: String = if (SystemInfo.isWindows) System.getenv("PUBLIC") else "/usr/local/bin"
 
