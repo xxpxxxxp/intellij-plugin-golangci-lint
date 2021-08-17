@@ -28,6 +28,7 @@ import com.ypwang.plugin.handler.DefaultHandler
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.model.RunProcessResult
 import java.io.File
+import java.nio.charset.Charset
 import java.nio.file.Paths
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
@@ -145,8 +146,9 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
         // cache not found or outdated
         // ====================================================================================================================================
         return try {
+            val encoding = file.virtualFile.charset
             val params = buildParameters(file, project, relativePath)
-            val issues = runAndProcessResult(project, runningPath, params, mapOf("PATH" to getSystemPath(project), "GOPATH" to getGoPath(project)))
+            val issues = runAndProcessResult(project, runningPath, params, mapOf("PATH" to getSystemPath(project), "GOPATH" to getGoPath(project)), encoding)
             synchronized(cache) {
                 cache[cachePath] = System.currentTimeMillis() to issues
             }
@@ -322,8 +324,8 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
 
     // executionLock must be hold during the whole time of execution
     // wake up backlog thread if there's any, or release executionLock
-    private fun executeAndWakeBacklogThread(runningPath: String, parameters: List<String>, env: Map<String, String>): RunProcessResult {
-        val result = GolangCiOutputParser.runProcess(parameters, runningPath, env)
+    private fun executeAndWakeBacklogThread(runningPath: String, parameters: List<String>, env: Map<String, String>, encoding: Charset): RunProcessResult {
+        val result = GolangCiOutputParser.runProcess(parameters, runningPath, env, encoding)
 
         val workload = workloadsLock.withLock {
             if (workLoads.isNotEmpty()) {
@@ -345,18 +347,18 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
         return result
     }
 
-    private fun execute(runningPath: String, parameters: List<String>, env: Map<String, String>): RunProcessResult {
+    private fun execute(runningPath: String, parameters: List<String>, env: Map<String, String>, encoding: Charset): RunProcessResult {
         // main execution logic: 1. FIFO; 2. De-dup in backlog
         if (executionLock.compareAndSet(false, true))
             // own the execution lock, run immediately
-            return executeAndWakeBacklogThread(runningPath, parameters, env)
+            return executeAndWakeBacklogThread(runningPath, parameters, env, encoding)
 
         // had to wait, add to backlog
         val (foundInBacklog, workload) = workloadsLock.withLock {
             // double check
             if (executionLock.compareAndSet(false, true))
                 // working thread released executionLock, so there's no backlog now, run immediately
-                return executeAndWakeBacklogThread(runningPath, parameters, env)
+                return executeAndWakeBacklogThread(runningPath, parameters, env, encoding)
 
             var found = true
             var wl = workLoads[runningPath]
@@ -380,7 +382,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
             workload.executionCondition.await()
             workload.executionMutex.unlock()
             // executionLock guaranteed
-            workload.result = executeAndWakeBacklogThread(runningPath, parameters, env)
+            workload.result = executeAndWakeBacklogThread(runningPath, parameters, env, encoding)
             // wake up backlog threads listen on me
             workload.broadcastMutex.lock()
             workload.broadcastCondition.signalAll()
@@ -392,8 +394,14 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
 
     // return issues (might be empty) if run succeed
     // return null if run failed
-    private fun runAndProcessResult(project: Project, runningPath: String, parameters: List<String>, env: Map<String, String>): List<LintIssue> {
-        val processResult = execute(runningPath, parameters, env)
+    private fun runAndProcessResult(
+        project: Project,
+        runningPath: String,
+        parameters: List<String>,
+        env: Map<String, String>,
+        encoding: Charset
+    ): List<LintIssue> {
+        val processResult = execute(runningPath, parameters, env, encoding)
         when (processResult.returnCode) {
             // 0: no hint found; 1: hint found
             0, 1 -> return GolangCiOutputParser.parseIssues(processResult)

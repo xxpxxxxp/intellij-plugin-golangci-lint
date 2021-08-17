@@ -49,15 +49,15 @@ fun getSystemPath(project: Project): String {
 
 fun getGoPath(project: Project): String {
     // try best to get GOPATH, as GoLand or Intellij's go plugin have to know the correct 'GOPATH' for inspections,
-    // full GOPATH should be: IDE project GOPATH + Global GOPATH
+    // full GOPATH should be: IDE project GOPATH + Global GOPATH + System GOPATH
     val goPluginSettings = GoProjectLibrariesService.getInstance(project)
-    return goPluginSettings.libraryRootUrls.map { Paths.get(VirtualFileManager.extractPath(it)).toString() }.toMutableList().apply {
-        if (goPluginSettings.isUseGoPathFromSystemEnvironment) {
-            this.addAll(GoApplicationLibrariesService.getInstance().libraryRootUrls.map { Paths.get(VirtualFileManager.extractPath(it)).toString() })
-            if (systemGoPath != null)
+    return (goPluginSettings.libraryRootUrls + GoApplicationLibrariesService.getInstance().libraryRootUrls)
+        .map { Paths.get(VirtualFileManager.extractPath(it)).toString() }
+        .toMutableList()
+        .apply {
+            if (goPluginSettings.isUseGoPathFromSystemEnvironment && systemGoPath != null)
                 this.add(systemGoPath)
-        }
-    }.joinToString(File.pathSeparator)
+        }.joinToString(File.pathSeparator)
 }
 
 fun findCustomConfigInPath(path: String?): Optional<String> {
@@ -78,7 +78,7 @@ fun findCustomConfigInPath(path: String?): Optional<String> {
     return Optional.empty()
 }
 
-fun fetchProcessOutput(process: Process): RunProcessResult {
+fun fetchProcessOutput(process: Process, encoding: Charset): RunProcessResult {
     val outputConsumer = ByteArrayOutputStream()
     val outputThread = OutputReader.fetch(process.inputStream, outputConsumer)
     val errorConsumer = ByteArrayOutputStream()
@@ -89,7 +89,7 @@ fun fetchProcessOutput(process: Process): RunProcessResult {
         errorThread.join()
         outputThread.join()
 
-        return RunProcessResult(returnCode, outputConsumer.toString(), errorConsumer.toString())
+        return RunProcessResult(returnCode, outputConsumer.toString(encoding), errorConsumer.toString(encoding))
     } catch (e: InterruptedException) {
         logger.error(e)
     }

@@ -6,16 +6,20 @@ import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.model.LintReport
 import com.ypwang.plugin.model.RunProcessResult
 import java.io.File
+import java.nio.charset.Charset
 import java.util.*
 
 object GolangCiOutputParser {
-    fun runProcess(params: List<String>, runningDir: String?, env: Map<String, String>): RunProcessResult =
-            fetchProcessOutput(ProcessBuilder(params).apply {
+    fun runProcess(params: List<String>, runningDir: String?, env: Map<String, String>, encoding: Charset = Charset.defaultCharset()): RunProcessResult =
+        fetchProcessOutput(
+            ProcessBuilder(params).apply {
                 val curEnv = this.environment()
                 env.forEach { kv -> curEnv[kv.key] = kv.value }
                 if (runningDir != null)
                     this.directory(File(runningDir))
-            }.start())
+            }.start(),
+            encoding
+        )
 
     fun parseIssues(result: RunProcessResult): List<LintIssue> {
         assert(result.returnCode == 0 || result.returnCode == 1)

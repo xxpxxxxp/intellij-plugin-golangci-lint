@@ -47,6 +47,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -383,7 +384,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                     allLinters.addAll(GolangCiOutputParser.INSTANCE.parseLinters(GolangCiOutputParser.INSTANCE.runProcess(
                             arguments,
                             StringUtils.isNotEmpty(projectDir.getText()) ? projectDir.getText() : null,
-                            Collections.singletonMap("PATH", UtilitiesKt.getSystemPath(curProject))
+                            Collections.singletonMap("PATH", UtilitiesKt.getSystemPath(curProject)),
+                            Charset.defaultCharset()
                     )));
                 } catch (Exception e) {
                     UtilitiesKt.getLogger().error(e);
