@@ -35,8 +35,8 @@ object GolangCiOutputParser {
 
         val linters = mutableListOf<GoLinter>()
         val linterRaw = result.stdout.lines()
-        // format: name[ (aka)]: description [fast: bool, auto-fix: bool]
-        val regex = Regex("""(?<name>\w+)( \((?<aka>[\w, ]+)\))?: (?<description>.+) \[fast: (?<fast>true|false), auto-fix: (?<autofix>true|false)]""")
+        // format: name[ (aka)][ deprecated]: description [fast: bool, auto-fix: bool]
+        val regex = Regex("""(?<name>\w+)( \((?<aka>[\w, ]+)\))?( \[(?<deprecated>deprecated)])?: (?<description>.+) \[fast: (?<fast>true|false), auto-fix: (?<autofix>true|false)]""")
         // parse output
         var enabled = true
         for (line in linterRaw) {
@@ -57,9 +57,11 @@ object GolangCiOutputParser {
                         enabled,
                         it.groups["name"]!!.value,
                         it.groups["aka"]?.value ?: "",
+                        it.groups["deprecated"]?.value == "deprecated",
                         it.groups["description"]!!.value,
                         it.groups["fast"]!!.value.toBoolean(),
-                        it.groups["autofix"]!!.value.toBoolean())
+                        it.groups["autofix"]!!.value.toBoolean(),
+                    )
                 )
             }
         }

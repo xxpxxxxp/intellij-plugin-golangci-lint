@@ -4,6 +4,7 @@ data class GoLinter (
         val defaultEnabled: Boolean,
         val name: String,
         val aka: String,
+        val isDeprecated: Boolean,
         val description: String,
         val fast: Boolean,
         val autoFix: Boolean
