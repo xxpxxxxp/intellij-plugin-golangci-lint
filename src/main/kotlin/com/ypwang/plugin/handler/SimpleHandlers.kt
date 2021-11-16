@@ -206,6 +206,13 @@ object IfShortHandler : ProblemHandler() {
         }
 }
 
+object varNameLenHandler : ProblemHandler() {
+    override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<IntentionAction>, TextRange?> =
+        chainFindAndHandle(file, document, issue, overrideLine) { element: GoNamedElement ->
+            EmptyLocalQuickFix to element.textRange
+        }
+}
+
 // explanation linter
 fun explanationHandler(url: String): ProblemHandler = object : ProblemHandler() {
     override fun doSuggestFix(file: PsiFile, document: Document, issue: LintIssue, overrideLine: Int): Pair<Array<IntentionAction>, TextRange?> =

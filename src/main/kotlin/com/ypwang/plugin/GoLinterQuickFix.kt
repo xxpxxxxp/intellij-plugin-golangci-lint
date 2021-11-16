@@ -32,7 +32,8 @@ val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "errorlint" to ErrorLintHandler,
         "ifshort" to IfShortHandler,
         "forcetypeassert" to ForceTypeAssertHandler,
-        "predeclared" to PreDeclaredHandler
+        "predeclared" to PreDeclaredHandler,
+        "varnamelen" to varNameLenHandler
 ).apply {
     this.putAll(listOf("structcheck", "varcheck", "deadcode", "unused").map { it to NamedElementHandler })
     this.putAll(ProblemHandler.FuncLinters.map { it to funcNoLintHandler(it) })
