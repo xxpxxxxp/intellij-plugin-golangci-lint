@@ -274,18 +274,15 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                 "--max-issues-per-linter", "0", "--max-same-issues", "0"
         )
 
-        customConfigDetected(GoLinterConfig.customProjectDir.orElse(project.basePath!!)).ifPresentOrElse(
-            {
-                parameters.add("-c")
-                parameters.add(it)
-            },
-            {
-                GoLinterConfig.customConfigFile.ifPresentOrElse(
+        customConfigDetected(GoLinterConfig.customProjectDir.orElse(project.basePath!!))
+            .or { GoLinterConfig.customConfigFile }
+            .ifPresentOrElse(
                     {
                         parameters.add("-c")
                         parameters.add(it)
                     },
                     {
+                        parameters.add("--no-config")
                         // use default linters
                         val enabledLinters = GoLinterConfig.enabledLinters
                         if (enabledLinters != null) {
@@ -299,8 +296,6 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                         }
                     }
                 )
-            }
-        )
 
         val module = ModuleUtilCore.findModuleForFile(file)
         if (module != null) {

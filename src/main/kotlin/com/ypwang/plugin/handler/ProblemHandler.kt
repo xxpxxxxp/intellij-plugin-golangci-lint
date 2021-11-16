@@ -13,7 +13,7 @@ abstract class ProblemHandler {
         val EmptyLocalQuickFix = arrayOf<IntentionAction>()
         val NonAvailableFix = EmptyLocalQuickFix to null
         // they reports issue of whole function
-        val FuncLinters = setOf("funlen", "gocognit", "gochecknoinits", "gocyclo", "nakedret")
+        val FuncLinters = setOf("cyclop", "funlen", "gocognit", "gochecknoinits", "gocyclo", "nakedret")
     }
 
     protected fun calcPos(document: Document, issue: LintIssue, overrideLine: Int): Int =

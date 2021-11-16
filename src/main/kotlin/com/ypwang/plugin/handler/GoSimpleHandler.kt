@@ -140,6 +140,11 @@ object GoSimpleHandler : ProblemHandler() {
                             arrayOf<IntentionAction>(GoEscapeCallExprFix(element)) to element.textRange
                         else NonAvailableFix
                     }
+                // type assertion to the same type
+                "S1040" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoTypeAssertionExpr ->
+                        arrayOf<IntentionAction>(GoReplaceElementFix(element.expression.text, element, GoExpression::class.java)) to element.textRange
+                    }
                 else -> NonAvailableFix
             }
 }

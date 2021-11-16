@@ -171,22 +171,35 @@ object GoCriticHandler : ProblemHandler() {
             }
 
             addHandler(this, "singleCaseSwitch: should rewrite switch statement to if statement") { _, _, _, _, element: GoSwitchStatement ->
-                    // cannot handle type switch with var assign
-                    val fix = if (element is GoTypeSwitchStatement && element.statement != null) EmptyLocalQuickFix
-                    else arrayOf<IntentionAction>(GoSingleCaseSwitchFix(element))
-                    fix to element.switchStart?.textRange
+                // cannot handle type switch with var assign
+                val fix = if (element is GoTypeSwitchStatement && element.statement != null) EmptyLocalQuickFix
+                else arrayOf<IntentionAction>(GoSingleCaseSwitchFix(element))
+                fix to element.switchStart?.textRange
             }
 
             addHandler(this, "ifElseChain: rewrite if-else to switch statement") { _, _, _, _, element: GoIfStatement ->
-                    arrayOf<IntentionAction>(GoIfToSwitchFix(element)) to element.`if`.textRange
+                arrayOf<IntentionAction>(GoIfToSwitchFix(element)) to element.`if`.textRange
             }
 
             addHandler(this, "commentFormatting: put a space between `//` and comment text") { _, _, _, _, element: PsiCommentImpl ->
-                    if (element.text.startsWith("//"))
-                        arrayOf<IntentionAction>(GoCommentFix(element, "Add space") { project, comment ->
-                            GoElementFactory.createComment(project, "// " + comment.text.substring(2))
-                        }) to element.textRange
-                    else NonAvailableFix
+                if (element.text.startsWith("//"))
+                    arrayOf<IntentionAction>(GoCommentFix(element, "Add space") { project, comment ->
+                        GoElementFactory.createComment(project, "// " + comment.text.substring(2))
+                    }) to element.textRange
+                else NonAvailableFix
+            }
+
+            addHandler(this, "unlambda: replace") { _, _, issue, _, element: GoFunctionLit ->
+                val (_, replace) = extractQuote(issue.Text, 2)
+                arrayOf<IntentionAction>(GoReplaceElementFix(replace, element, GoExpression::class.java)) to element.textRange
+            }
+
+            addHandler(this, "sloppyTypeAssert:") { _, _, _, _, element: GoTypeAssertionExpr ->
+                arrayOf<IntentionAction>(GoReplaceElementFix(element.expression.text, element, GoExpression::class.java)) to element.textRange
+            }
+
+            addHandler(this, "badCall:") { _, _, _, _, element: GoCallExpr ->
+                arrayOf<IntentionAction>(GoEscapeCallExprFix(element)) to element.textRange
             }
         }
 }
