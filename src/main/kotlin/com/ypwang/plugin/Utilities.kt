@@ -40,11 +40,9 @@ val linterExecutableName = if (SystemInfo.isWindows) "$LinterName.exe" else Lint
 val executionDir: String = if (SystemInfo.isWindows) System.getenv("PUBLIC") else "/usr/local/bin"
 
 fun getSystemPath(project: Project): String {
-    val goExecutable = GoSdkService.getInstance(project).getSdk(null).executable?.path ?: return systemPath
-
+    val goRoot = GoSdkService.getInstance(project).getSdk(null).sdkRoot?.path ?: return systemPath
     // IDE GOROOT should take precedence
-    val goBin = Paths.get(goExecutable).parent.toString()
-    return systemPath.split(File.pathSeparator).toMutableList().apply { this.add(0, goBin) }.joinToString(File.pathSeparator)
+    return systemPath.split(File.pathSeparator).toMutableList().apply { this.add(0, goRoot) }.joinToString(File.pathSeparator)
 }
 
 fun getGoPath(project: Project): String {

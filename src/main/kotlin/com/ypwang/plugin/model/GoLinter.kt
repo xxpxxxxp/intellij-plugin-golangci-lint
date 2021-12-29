@@ -9,7 +9,12 @@ data class GoLinter (
         val fast: Boolean,
         val autoFix: Boolean
 ) {
-    val fullName by lazy {
-        if (aka.isEmpty()) name else "$name ($aka)"
+    val fullDescription by lazy {
+        val dsBuilder = StringBuilder()
+        if (isDeprecated)
+            dsBuilder.append("[DEPRECATED] ")
+
+        dsBuilder.append(description)
+        dsBuilder.toString()
     }
 }

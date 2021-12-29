@@ -3,7 +3,6 @@
 [![License](https://img.shields.io/github/license/xxpxxxxp/intellij-plugin-golangci-lint)](https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/LICENSE)
 [![Version](https://img.shields.io/jetbrains/plugin/v/12496-go-linter)](https://plugins.jetbrains.com/plugin/12496-go-linter)
 [![#Download](https://img.shields.io/jetbrains/plugin/d/12496-go-linter.svg)](https://plugins.jetbrains.com/plugin/12496-go-linter)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/50dd3264c0f74e85929d53bd780fcdfd)](https://app.codacy.com/manual/xxpxxxxp/intellij-plugin-golangci-lint?utm_source=github.com&utm_medium=referral&utm_content=xxpxxxxp/intellij-plugin-golangci-lint&utm_campaign=Badge_Grade_Dashboard)
 
 # Intellij/Goland Linter Inspection Plugin
 
