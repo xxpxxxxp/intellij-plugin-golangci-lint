@@ -218,7 +218,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         for (GoLinter linter : allLinters) {
             model.addRow(new Object[]{
                     new Pair<>(enabledLinters.contains(linter.getName()), linter.getName()),
-                    linter.getDescription()
+                    linter.getFullDescription()
             });
         }
     }
@@ -391,7 +391,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                     UtilitiesKt.getLogger().error(e);
                     ApplicationManager.getApplication().invokeLater(
                             () -> {
-                                showErrorBox("Failed to Discover Linters", "'GOROOT' not set. Please re-select executable after set 'GOROOT'.");
+                                showErrorBox("Failed to Discover Linters:", e.getMessage());
                                 ShowSettingsUtil.getInstance().editConfigurable(curProject, new GoSdkConfigurable(curProject, true));
                             },
                             ModalityState.stateForComponent(settingPanel)
