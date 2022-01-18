@@ -266,12 +266,8 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
 
     private fun buildParameters(file: PsiFile, project: Project, sub: String): List<String> {
         val parameters = mutableListOf(
-                GoLinterConfig.goLinterExe,
-                "run", "--out-format", "json", "--allow-parallel-runners",
-                // don't use to much CPU. Runtime should have at least 1 available processor, right?
-                "-j", ((Runtime.getRuntime().availableProcessors() + 3) / 4).toString(),
-                // no issue limit
-                "--max-issues-per-linter", "0", "--max-same-issues", "0"
+                GoLinterConfig.goLinterExe, "run", "--out-format", "json", "--allow-parallel-runners",
+                "-j", GoLinterConfig.concurrency.toString(), "--max-issues-per-linter", "0", "--max-same-issues", "0" // no issue limit
         )
 
         customConfigDetected(GoLinterConfig.customProjectDir.orElse(project.basePath!!))
@@ -464,7 +460,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                             notificationGroup.createNotification(
                                     ErrorTitle,
                                     "Please make sure there's no syntax error, then check if any config error",
-                                    NotificationType.ERROR).apply {
+                                    NotificationType.WARNING).apply {
                                 this.addAction(NotificationAction.createSimple("Configure") {
                                     ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
                                     this.expire()

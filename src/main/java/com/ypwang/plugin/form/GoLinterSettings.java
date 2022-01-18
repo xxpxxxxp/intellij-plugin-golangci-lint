@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private static final String CONFIG_HELP = "https://golangci-lint.run/usage/configuration/#config-file";
@@ -87,6 +88,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     private JLabel helpDocumentLabel;
     private JPanel linterSelectPanel;
     private JCheckBox projectRootCheckBox;
+    private JComboBox<Integer> concurrencyComboBox;
     private AsyncProcessIcon.Big refreshProcessIcon;
     private JTable linterTable;
 
@@ -107,6 +109,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
         linterChooseComboBox.setRenderer(new FileExistCellRender());
         linterChooseComboBox.addActionListener(this::linterSelected);
+        concurrencyComboBox.addActionListener(l -> modified = true);
         linterChooseButton.addActionListener(e -> linterChoose());
         projectRootCheckBox.addItemListener(this::enableProjectRoot);
         customProjectSelectButton.addActionListener(e -> customProjectDir());
@@ -135,6 +138,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         }));
         fetchLatestReleaseButton = new JButton();
         fetchLatestReleaseButton.addMouseListener(new MouseAdapter() {
+            @Override
             public void mousePressed(MouseEvent e) {
                 fetchLatestReleasePopup.show(e.getComponent(), e.getX(), e.getY());
             }
@@ -269,7 +273,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                 f -> {
                     // found an valid config file
                     configLabel1 = createLinkLabel(String.format("Using %s", f), desktop -> desktop.open(new File(f)));
-                    GridConstraints constraints = new GridConstraints(2, 0, 1, 3, 0, 1, 3, 0, null, null, null, 0, false);
+                    GridConstraints constraints = new GridConstraints(3, 0, 1, 3, 0, 1, 3, 0, null, null, null, 0, false);
                     settingPanel.add(configLabel1, constraints);
                     linterTable.setEnabled(false);
                 },
@@ -322,7 +326,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                         }
                     });
 
-                    GridConstraints constraints = new GridConstraints(2, 0, 1, 1, 0, 1, 3, 0, null, null, null, 0, false);
+                    GridConstraints constraints = new GridConstraints(3, 0, 1, 1, 0, 1, 3, 0, null, null, null, 0, false);
                     settingPanel.add(customConfig, constraints);
 
                     constraints.setColumn(1);
@@ -460,6 +464,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     @Override
     public void apply() {
+        GoLinterConfig.INSTANCE.setConcurrency((Integer) concurrencyComboBox.getSelectedItem());
+
         if (linterChooseComboBox.getSelectedItem() != null) {
             GoLinterConfig.INSTANCE.setGoLinterExe((String) linterChooseComboBox.getSelectedItem());
         }
@@ -502,6 +508,13 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     @Override
     public void reset() {
+        {
+            DefaultComboBoxModel<Integer> model = new DefaultComboBoxModel<>();
+            model.addAll(IntStream.rangeClosed(1, Runtime.getRuntime().availableProcessors()).boxed().collect(Collectors.toList()));
+            concurrencyComboBox.setModel(model);
+            concurrencyComboBox.setSelectedItem(GoLinterConfig.INSTANCE.getConcurrency());
+        }
+
         String dir = GoLinterConfig.INSTANCE.getCustomProjectDir().orElse(curProject.getBasePath());
         if (dir == null) {
             dir = "";

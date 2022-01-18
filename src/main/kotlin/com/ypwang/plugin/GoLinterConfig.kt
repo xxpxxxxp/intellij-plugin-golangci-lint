@@ -11,6 +11,7 @@ object GoLinterConfig {
     private const val GO_CUSTOM_DIR = "go-custom-dir"
     private const val GO_CUSTOM_CONFIG = "go-custom-config"
     private const val CHECK_GO_LINTER_EXE = "check-golangci-lint"
+    private const val GO_LINTER_CONCURRENCY = "golangci-lint-concurrency"
 
     private val properties = PropertiesComponent.getInstance()
 
@@ -40,4 +41,9 @@ object GoLinterConfig {
     var checkGoLinterExe: Boolean
         get() = properties.getBoolean(CHECK_GO_LINTER_EXE, true)
         set(value) = properties.setValue(CHECK_GO_LINTER_EXE, value, true)
+
+    var concurrency: Int
+        // don't use to much CPU. Runtime should have at least 1 available processor, right?
+        get() = properties.getInt(GO_LINTER_CONCURRENCY, (Runtime.getRuntime().availableProcessors() + 3) / 4)
+        set(value) = properties.setValue(GO_LINTER_CONCURRENCY, value, (Runtime.getRuntime().availableProcessors() + 3) / 4)
 }
