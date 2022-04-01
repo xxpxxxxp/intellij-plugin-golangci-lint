@@ -7,22 +7,8 @@
 # Intellij/Goland Linter Inspection Plugin
 
 ## Heads up!
-If you've encountered such error:
-![image](https://user-images.githubusercontent.com/1585918/147742042-b2fb13a0-caf4-4e0c-9b61-bd7a8aaf5656.png)
-Or, in previous version, telling you that `GOROOT is not set`  
-It's caused by an upstreaming bug of `gocritic`:  
-https://github.com/go-critic/go-critic/issues/1157  
-https://github.com/go-critic/go-critic/issues/1126  
-
-Please temporarily disable `gocritic` linter until a new version of golangci-lint released  
-In case you are stuck by the dialog and cannot unselect `gocritic`, please manually remove property `go-enabled-linters` from file:  
-Win: %APPDATA%\JetBrains\Goland2021.3\options\other.xml  
-Mac: ~/Library/Application Support/JetBrains/Goland2021.3/options/other.xml  
-Linux: ~/.config/JetBrains/Goland2021.3/options/other.xml  
-
-For config file users, please disable gocritic in your config file directly  
-Then the settings will be working  
-
+In case of warning: `Please make sure no syntax or config error`  
+Please run `go mod tidy` to refresh deps
 
 ======  
 Write code, write better code  
