@@ -6,13 +6,13 @@
 
 # Intellij/Goland Linter Inspection Plugin
 
+Write code, write better code  
+All credit goes to [GolangCI-Lint authors](https://github.com/golangci/golangci-lint/graphs/contributors).
+
+================================  
 ## Heads up!
 In case of warning: `Please make sure no syntax or config error`  
 Please run `go mod tidy` to refresh deps
-
-======  
-Write code, write better code  
-All credit goes to [GolangCI-Lint authors](https://github.com/golangci/golangci-lint/graphs/contributors).
 
 ## How to use
 After the plugin installed, you will see a popup on IDEA startup, otherwise please go to settings manually:

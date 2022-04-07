@@ -266,8 +266,16 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
 
     private fun buildParameters(file: PsiFile, project: Project, sub: String): List<String> {
         val parameters = mutableListOf(
-                GoLinterConfig.goLinterExe, "run", "--out-format", "json", "--allow-parallel-runners",
-                "-j", GoLinterConfig.concurrency.toString(), "--max-issues-per-linter", "0", "--max-same-issues", "0" // no issue limit
+            GoLinterConfig.goLinterExe, "run",
+            "--out-format", "json",
+            "--allow-parallel-runners",
+            // control concurrency
+            "-j", GoLinterConfig.concurrency.toString(),
+            // fix exit code on issue
+            "--issues-exit-code", "1",
+            // no issue limit
+            "--max-issues-per-linter", "0",
+            "--max-same-issues", "0"
         )
 
         customConfigDetected(GoLinterConfig.customProjectDir.orElse(project.basePath!!))

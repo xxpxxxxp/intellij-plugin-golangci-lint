@@ -1,6 +1,7 @@
 package com.ypwang.plugin
 
 import com.google.gson.Gson
+import com.intellij.openapi.project.Project
 import com.ypwang.plugin.model.GoLinter
 import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.model.LintReport
@@ -29,9 +30,19 @@ object GolangCiOutputParser {
                 ?: Collections.emptyList()
     }
 
-    fun parseLinters(result: RunProcessResult): List<GoLinter> {
-        if (result.returnCode != 0)
-            throw Exception("Failed to Discover Linters: $result")
+    fun parseLinters(project: Project, result: RunProcessResult): List<GoLinter> {
+        when (result.returnCode) {
+            0 -> {
+                // continue
+            }
+            2 ->
+                if (isGo18(project))
+                    throw Exception("Incompatible golangci-lint with Go1.18, please update to version after 1.45.0")
+                else
+                    throw Exception("golangci-lint panic: $result")
+            else ->
+                throw Exception("Failed to Discover Linters: $result")
+        }
 
         val linters = mutableListOf<GoLinter>()
         val linterRaw = result.stdout.lines()

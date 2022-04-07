@@ -385,12 +385,15 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                         arguments.add(configLabel2.getText());
                     }
 
-                    allLinters.addAll(GolangCiOutputParser.INSTANCE.parseLinters(GolangCiOutputParser.INSTANCE.runProcess(
-                            arguments,
-                            StringUtils.isNotEmpty(projectDir.getText()) ? projectDir.getText() : null,
-                            Collections.singletonMap("PATH", UtilitiesKt.getSystemPath(curProject)),
-                            Charset.defaultCharset()
-                    )));
+                    allLinters.addAll(GolangCiOutputParser.INSTANCE.parseLinters(
+                            curProject,
+                            GolangCiOutputParser.INSTANCE.runProcess(
+                                arguments,
+                                StringUtils.isNotEmpty(projectDir.getText()) ? projectDir.getText() : null,
+                                Collections.singletonMap("PATH", UtilitiesKt.getSystemPath(curProject)),
+                                Charset.defaultCharset()
+                            )
+                    ));
                 } catch (Exception e) {
                     UtilitiesKt.getLogger().error(e);
                     ApplicationManager.getApplication().invokeLater(

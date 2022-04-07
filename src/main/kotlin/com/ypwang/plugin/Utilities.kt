@@ -5,15 +5,14 @@ import com.goide.project.GoProjectLibrariesService
 import com.goide.sdk.GoSdkService
 import com.google.common.io.CharStreams
 import com.google.gson.Gson
-import com.google.gson.JsonSyntaxException
 import com.intellij.notification.NotificationGroup
 import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.ypwang.plugin.model.GithubRelease
-import com.ypwang.plugin.model.GolangciLintVersion
 import com.ypwang.plugin.model.RunProcessResult
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.http.client.methods.HttpGet
@@ -237,25 +236,6 @@ fun buildCommand(module: String, parameters: List<String>, envs: Map<String, Str
             this.append(parameters.joinToString(" "){ "$cmdQuote$it$cmdQuote" })
         }.toString()
 
-fun getGolangCiVersion(path: String, project: Project): Optional<String> {
-    if (File(GoLinterConfig.goLinterExe).canExecute()) {
-        val result = GolangCiOutputParser.runProcess(
-            listOf(path, "version", "--format", "json"),
-            null,
-            mapOf("PATH" to getSystemPath(project))
-        )
-        if (result.returnCode == 0) {
-            try {
-                return Optional.of(Gson().fromJson(result.stderr, GolangciLintVersion::class.java).version)
-            } catch (e: JsonSyntaxException) {
-                // ignore
-            }
-        }
-    }
-
-    return Optional.empty()
-}
-
 private val OS: String by lazy {
     when {
         SystemInfo.isWindows -> "windows"
@@ -285,3 +265,17 @@ private class OutputReader(val inputStream: InputStream, val consumer: ByteArray
         }
     }
 }
+
+fun isGo18(project: Project): Boolean {
+    val sdk = GoSdkService.getInstance(project).getSdk(null)
+    return sdk.version != null && compareVersion(sdk.version!!, "1.18") >= 0
+}
+
+fun compareVersion(v1: String, v2: String): Int =
+    when (val unmatched = v1.split('.').zip(v2.split('.')).firstOrNull { it.first != it.second }) {
+        null -> 0
+        else -> {
+            val (a, b) = unmatched
+            a.toInt().compareTo(b.toInt())
+        }
+    }

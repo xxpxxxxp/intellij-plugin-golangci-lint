@@ -1,5 +1,7 @@
 package com.ypwang.plugin
 
+import com.google.gson.Gson
+import com.google.gson.JsonSyntaxException
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationListener
 import com.intellij.notification.NotificationType
@@ -12,19 +14,46 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.StartupActivity
 import com.ypwang.plugin.form.GoLinterSettings
 import com.ypwang.plugin.model.GithubRelease
+import com.ypwang.plugin.model.GolangciLintVersion
 import org.apache.http.client.config.RequestConfig
 import org.apache.http.impl.client.HttpClientBuilder
 import java.io.File
 
-class GoLinterSettingsTracker: StartupActivity.DumbAware {
+class GoLinterSettingsTracker : StartupActivity.DumbAware {
     override fun runActivity(project: Project) {
         try {
             if (GoLinterConfig.checkGoLinterExe) {
-                // check if golangci-lint is set
-                getGolangCiVersion(GoLinterConfig.goLinterExe, project).ifPresentOrElse(
-                        { checkExecutableUpdate(it, project) },
-                        { noExecutableNotification(project) }
-                )
+                if (File(GoLinterConfig.goLinterExe).canExecute()) {
+                    val result = GolangCiOutputParser.runProcess(
+                        listOf(GoLinterConfig.goLinterExe, "version", "--format", "json"),
+                        null,
+                        mapOf("PATH" to getSystemPath(project))
+                    )
+                    when (result.returnCode) {
+                        0 ->
+                            // for backward capability, try both stdout and stderr
+                            for (str in listOf(result.stderr, result.stdout).filter { it.isNotEmpty() }) {
+                                try {
+                                    checkExecutableUpdate(Gson().fromJson(str, GolangciLintVersion::class.java).version, project)
+                                    return
+                                } catch (e: JsonSyntaxException) {
+                                    // ignore
+                                }
+                            }
+                        2 -> {
+                            // panic!
+                            if (isGo18(project))
+                                notificationGroup.createNotification(
+                                    "Incompatible golangci-lint with Go1.18",
+                                    "Please update golangci-lint after v1.45.0",
+                                    NotificationType.INFORMATION
+                                ).notify(project)
+                            return
+                        }
+                    }
+                }
+
+                noExecutableNotification(project)
             }
         } catch (ignore: Throwable) {
             // ignore
@@ -33,9 +62,10 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
 
     private fun noExecutableNotification(project: Project) {
         notificationGroup.createNotification(
-                "Configure golangci-lint",
-                "golangci-lint executable is needed for linter inspection work. <a href=\"https://github.com/xxpxxxxp/intellij-plugin-golangci-lint\">Checkout guide</a>",
-                NotificationType.INFORMATION).apply {
+            "Configure golangci-lint",
+            "golangci-lint executable is needed for linter inspection work. <a href=\"https://github.com/xxpxxxxp/intellij-plugin-golangci-lint\">Checkout guide</a>",
+            NotificationType.INFORMATION
+        ).apply {
             this.setListener(NotificationListener.URL_OPENING_LISTENER)
             this.addAction(NotificationAction.createSimple("Configure") {
                 ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
@@ -56,25 +86,20 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
                 try {
                     val timeout = 3000
                     val latestMeta = HttpClientBuilder.create()
-                            .disableContentCompression()
-                            .setDefaultRequestConfig(RequestConfig.custom()
-                                    .setConnectTimeout(timeout)
-                                    .setConnectionRequestTimeout(timeout)
-                                    .setSocketTimeout(timeout).build())
-                            .build()
-                            .use { getLatestReleaseMeta(it) }
+                        .disableContentCompression()
+                        .setDefaultRequestConfig(
+                            RequestConfig.custom()
+                                .setConnectTimeout(timeout)
+                                .setConnectionRequestTimeout(timeout)
+                                .setSocketTimeout(timeout).build()
+                        )
+                        .build()
+                        .use { getLatestReleaseMeta(it) }
                     val latestVersion = latestMeta.name.substring(1)
-
-                    if (curVersion.matches(Regex("""\d+\.\d+\.\d+"""))) {
-                        val versionDiff = latestVersion.split('.')
-                                .zip(curVersion.split('.'))
-                                .firstOrNull { it.first != it.second }
-                                ?: return
-                        if (versionDiff.first.toInt() > versionDiff.second.toInt())
-                            updateNotification(project, "golangci-lint update available", latestMeta)
-                    } else {
+                    if (!curVersion.matches(Regex("""\d+\.\d+\.\d+""")))
                         updateNotification(project, "golangci-lint is custom built: $curVersion", latestMeta)
-                    }
+                    else if (compareVersion(latestVersion, curVersion) > 0)
+                        updateNotification(project, "golangci-lint update available", latestMeta)
                 } catch (e: Exception) {
                     // ignore
                 }
@@ -87,9 +112,10 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
         val url = latestMeta.assets.single { it.name == platformBinName }.browserDownloadUrl
 
         notificationGroup.createNotification(
-                title,
-                "Download <a href=\"$url\">${latestMeta.name}</a> in browser",
-                NotificationType.INFORMATION).apply {
+            title,
+            "Download <a href=\"$url\">${latestMeta.name}</a> in browser",
+            NotificationType.INFORMATION
+        ).apply {
             this.setListener(NotificationListener.URL_OPENING_LISTENER)
 
             val file = File(GoLinterConfig.goLinterExe)
@@ -99,7 +125,11 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
                     ProgressManager.getInstance().run(object : Task.Backgroundable(project, "update golangci-lint") {
                         override fun run(indicator: ProgressIndicator) {
                             try {
-                                fetchLatestGoLinter(file.parent, { s -> indicator.text = s }, { f -> indicator.fraction = f }, { indicator.isCanceled })
+                                fetchLatestGoLinter(
+                                    file.parent,
+                                    { s -> indicator.text = s },
+                                    { f -> indicator.fraction = f },
+                                    { indicator.isCanceled })
                                 updateSucceedNotification(project, latestMeta)
                             } catch (e: ProcessCanceledException) {
                                 // ignore
@@ -120,9 +150,9 @@ class GoLinterSettingsTracker: StartupActivity.DumbAware {
 
     private fun updateSucceedNotification(project: Project, latestMeta: GithubRelease) {
         notificationGroup.createNotification(
-                "golangci-lint updated to ${latestMeta.name}",
-                latestMeta.body,
-                NotificationType.INFORMATION
+            "golangci-lint updated to ${latestMeta.name}",
+            latestMeta.body,
+            NotificationType.INFORMATION
         ).apply {
             this.addAction(NotificationAction.createSimple("Check config") {
                 ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
