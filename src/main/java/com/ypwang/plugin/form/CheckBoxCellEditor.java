@@ -45,7 +45,6 @@ class CheckBoxCellEditor extends AbstractCellEditor implements TableCellEditor, 
         }
 
         cb.setBorder(border);
-
         return cb;
     }
 

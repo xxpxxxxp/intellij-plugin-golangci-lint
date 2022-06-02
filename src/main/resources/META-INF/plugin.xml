@@ -21,7 +21,8 @@
     <depends>org.jetbrains.plugins.go</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <projectConfigurable groupId="tools" displayName="Go Linter" id="preference.GoLinterConfigurable" instance="com.ypwang.plugin.form.GoLinterSettings" />
+        <projectConfigurable groupId="tools" displayName="Go Linter" id="preference.GoLinterConfigurable" instance="com.ypwang.plugin.form.GoLinterConfigurable" />
+        <projectService serviceImplementation="com.ypwang.plugin.GoLinterSettings"/>
         <postStartupActivity implementation="com.ypwang.plugin.GoLinterSettingsTracker"/>
         <externalAnnotator language="go" implementationClass="com.ypwang.plugin.GoLinterExternalAnnotator"/>
         <localInspection language="go" shortName="GoLinter" enabledByDefault="true"

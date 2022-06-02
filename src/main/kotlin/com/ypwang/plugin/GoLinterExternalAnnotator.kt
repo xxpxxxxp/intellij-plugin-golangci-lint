@@ -3,6 +3,7 @@ package com.ypwang.plugin
 import com.goide.configuration.GoSdkConfigurable
 import com.goide.project.GoModuleSettings
 import com.goide.psi.GoFile
+import com.google.gson.Gson
 import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.lang.annotation.AnnotationHolder
 import com.intellij.lang.annotation.ExternalAnnotator
@@ -23,10 +24,13 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 import com.jetbrains.rd.util.first
 import com.twelvemonkeys.util.LRUMap
-import com.ypwang.plugin.form.GoLinterSettings
+import com.ypwang.plugin.form.GoLinterConfigurable
 import com.ypwang.plugin.handler.DefaultHandler
 import com.ypwang.plugin.model.LintIssue
+import com.ypwang.plugin.model.LintReport
 import com.ypwang.plugin.model.RunProcessResult
+import com.ypwang.plugin.platform.Platform
+import com.ypwang.plugin.platform.platformFactory
 import java.io.File
 import java.nio.charset.Charset
 import java.nio.file.Paths
@@ -68,7 +72,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
     private fun customConfigDetected(path: String): Optional<String> =
         // cache the result max 1min
         System.currentTimeMillis().let {
-            if (customConfigLastCheckTime.get() + 60000 < it || customConfigLastCheckTime.get() < GoLinterSettings.getLastSavedTime()) {
+            if (customConfigLastCheckTime.get() + 60000 < it || customConfigLastCheckTime.get() < GoLinterConfigurable.getLastSavedTime()) {
                 customConfig = findCustomConfigInPath(path)
                 customConfigLastCheckTime.set(it)
             }
@@ -83,14 +87,17 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
      */
     private val cache = LRUMap<String, Pair<Long, List<LintIssue>>>(19)
 
-    private data class Tuple4<T1, T2, T3, T4>(val t1: T1, val t2: T2, val t3: T3, val t4: T4)
     data class Result(val matchName: String, val annotations: List<LintIssue>)
 
     override fun getPairedBatchInspectionShortName(): String = GoLinterLocalInspection.SHORT_NAME
 
     override fun collectInformation(file: PsiFile): PsiFile? =
         runReadAction {
-            if (file.isValid && file.virtualFile != null && file is GoFile && File(GoLinterConfig.goLinterExe).canExecute()/* valid linter executable */)
+            val project = file.project
+            val platform = platformFactory(project)
+            if (file.isValid && file.virtualFile != null && file is GoFile &&
+                // valid linter executable
+                platform.canExecute(GoLinterSettings.getInstance(project).goLinterExe))
                 file
             else
                 null
@@ -98,35 +105,35 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
 
     override fun doAnnotate(file: PsiFile): Result? {
         val project = file.project
+        val settings = GoLinterSettings.getInstance(project)
         val absolutePath = Paths.get(file.virtualFile.path)     // file's absolute path
-        val (runningPath, relativePath, cachePath, matchName) =
-            if (GoLinterConfig.enableCustomProjectDir) {
-                // fallback to project base path
-                val projectPath = Paths.get(GoLinterConfig.customProjectDir.orElse(project.basePath!!))
 
-                if (!absolutePath.startsWith(projectPath))
-                    // file is not in current Go project, skip
-                    return null
+        // fallback to project base path
+        val projectPath = Paths.get(settings.customProjectDir ?: project.basePath!!)
+        if (!absolutePath.startsWith(projectPath))
+            // file is not in current Go project, skip
+            return null
 
-                val relative = projectPath.relativize(absolutePath.parent).toString().ifBlank { "." }   // file's relative path to running dir
-                val fileName = projectPath.relativize(absolutePath).toString()                          // file name
-                Tuple4(
+        // runningPath:  the working folder of golangci-lint
+        // relativePath: the run target folder
+        // matchName:    to match the output of golangci-lint
+        val (runningPath, relativePath, matchName) =
+            if (settings.enableCustomProjectDir) {
+                Triple(
                     projectPath.toString(),
-                    relative,
-                    absolutePath.parent.toString(),
-                    fileName
+                    projectPath.relativize(absolutePath.parent).toString().ifBlank { "." }, // the relative path of file's dir to running dir
+                    projectPath.relativize(absolutePath).toString()                         // the relative path of file to running dir
                 )
             } else {
-                val module = absolutePath.parent.toString()             // file's dir
-                val fileName = absolutePath.fileName.toString()         // file name
-                Tuple4(
-                    module,
+                Triple(
+                    absolutePath.parent.toString(),     // file's absolute dir
                     ".",
-                    module,
-                    fileName
+                    absolutePath.fileName.toString()    // relative file name
                 )
             }
 
+        // cachePath: the absolute path of file's dir, as the cache key
+        val cachePath = absolutePath.parent.toString()
         run {
             // see if cached
             val issueWithTTL = synchronized(cache) {
@@ -139,16 +146,21 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                 // issues not in dirty zone could still be useful
                 !isSaved(file) ||
                 // cached result is newer than both last config saved time and this file's last modified time
-                (issueWithTTL != null && file.virtualFile.timeStamp < issueWithTTL.first && GoLinterSettings.getLastSavedTime() < issueWithTTL.first))
+                (issueWithTTL != null && file.virtualFile.timeStamp < issueWithTTL.first && GoLinterConfigurable.getLastSavedTime() < issueWithTTL.first))
                 return Result(matchName, issueWithTTL?.second ?: listOf())
         }
 
         // cache not found or outdated
         // ====================================================================================================================================
         return try {
-            val encoding = file.virtualFile.charset
-            val params = buildParameters(file, project, relativePath)
-            val issues = runAndProcessResult(project, runningPath, params, mapOf("PATH" to getSystemPath(project), "GOPATH" to getGoPath(project)), encoding)
+            val params = buildParameters(file, project, settings, relativePath)
+            val issues = runAndProcessResult(
+                project,
+                runningPath,
+                params,
+                mapOf("PATH" to getSystemPath(project), "GOPATH" to getGoPath(project)),
+                file.virtualFile.charset
+            )
             synchronized(cache) {
                 cache[cachePath] = System.currentTimeMillis() to issues
             }
@@ -264,13 +276,13 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
         return saved
     }
 
-    private fun buildParameters(file: PsiFile, project: Project, sub: String): List<String> {
+    private fun buildParameters(file: PsiFile, project: Project, settings: GoLinterSettings, targetDir: String): List<String> {
         val parameters = mutableListOf(
-            GoLinterConfig.goLinterExe, "run",
+            settings.goLinterExe, "run",
             "--out-format", "json",
             "--allow-parallel-runners",
             // control concurrency
-            "-j", GoLinterConfig.concurrency.toString(),
+            "-j", settings.concurrency.toString(),
             // fix exit code on issue
             "--issues-exit-code", "1",
             // no issue limit
@@ -278,8 +290,8 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
             "--max-same-issues", "0"
         )
 
-        customConfigDetected(GoLinterConfig.customProjectDir.orElse(project.basePath!!))
-            .or { GoLinterConfig.customConfigFile }
+        customConfigDetected(settings.customProjectDir ?: project.basePath!!)
+            .or { Optional.ofNullable(settings.customConfigFile) }
             .ifPresentOrElse(
                     {
                         parameters.add("-c")
@@ -288,8 +300,8 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                     {
                         parameters.add("--no-config")
                         // use default linters
-                        val enabledLinters = GoLinterConfig.enabledLinters
-                        if (enabledLinters != null) {
+                        if (settings.linterSelected) {
+                            val enabledLinters = settings.enabledLinters
                             // no linter is selected, skip run
                             if (enabledLinters.isEmpty())
                                 throw Exception("all linters disabled")
@@ -301,15 +313,17 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                     }
                 )
 
+        // add same build tags with those in Goland
         val module = ModuleUtilCore.findModuleForFile(file)
         if (module != null) {
             val buildTagsSettings = GoModuleSettings.getInstance(module).buildTargetSettings
             val default = "default"
-            val buildTags = mutableListOf<String>().apply {
-                if (buildTagsSettings.arch != default) this.add(buildTagsSettings.arch)
-                if (buildTagsSettings.os != default) this.add(buildTagsSettings.os)
-                this.addAll(buildTagsSettings.customFlags)
-            }
+            val buildTags = mutableListOf<String>()
+            if (buildTagsSettings.arch != default)
+                buildTags.add(buildTagsSettings.arch)
+            if (buildTagsSettings.os != default)
+                buildTags.add(buildTagsSettings.os)
+            buildTags.addAll(buildTagsSettings.customFlags)
 
             if (buildTags.isNotEmpty()) {
                 parameters.add("--build-tags")
@@ -317,14 +331,14 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
             }
         }
 
-        parameters.add(sub)
+        parameters.add(targetDir)
         return parameters
     }
 
     // executionLock must be hold during the whole time of execution
     // wake up backlog thread if there's any, or release executionLock
-    private fun executeAndWakeBacklogThread(runningPath: String, parameters: List<String>, env: Map<String, String>, encoding: Charset): RunProcessResult {
-        val result = GolangCiOutputParser.runProcess(parameters, runningPath, env, encoding)
+    private fun executeAndWakeBacklogThread(platform: Platform, runningPath: String, parameters: List<String>, env: Map<String, String>, encoding: Charset): RunProcessResult {
+        val result = platform.runProcess(parameters, runningPath, env, encoding)
 
         val workload = workloadsLock.withLock {
             if (workLoads.isNotEmpty()) {
@@ -346,18 +360,18 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
         return result
     }
 
-    private fun execute(runningPath: String, parameters: List<String>, env: Map<String, String>, encoding: Charset): RunProcessResult {
+    private fun execute(platform: Platform, runningPath: String, parameters: List<String>, env: Map<String, String>, encoding: Charset): RunProcessResult {
         // main execution logic: 1. FIFO; 2. De-dup in backlog
         if (executionLock.compareAndSet(false, true))
             // own the execution lock, run immediately
-            return executeAndWakeBacklogThread(runningPath, parameters, env, encoding)
+            return executeAndWakeBacklogThread(platform, runningPath, parameters, env, encoding)
 
         // had to wait, add to backlog
         val (foundInBacklog, workload) = workloadsLock.withLock {
             // double check
             if (executionLock.compareAndSet(false, true))
                 // working thread released executionLock, so there's no backlog now, run immediately
-                return executeAndWakeBacklogThread(runningPath, parameters, env, encoding)
+                return executeAndWakeBacklogThread(platform, runningPath, parameters, env, encoding)
 
             var found = true
             var wl = workLoads[runningPath]
@@ -381,7 +395,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
             workload.executionCondition.await()
             workload.executionMutex.unlock()
             // executionLock guaranteed
-            workload.result = executeAndWakeBacklogThread(runningPath, parameters, env, encoding)
+            workload.result = executeAndWakeBacklogThread(platform, runningPath, parameters, env, encoding)
             // wake up backlog threads listen on me
             workload.broadcastMutex.lock()
             workload.broadcastCondition.signalAll()
@@ -400,10 +414,14 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
         env: Map<String, String>,
         encoding: Charset
     ): List<LintIssue> {
-        val processResult = execute(runningPath, parameters, env, encoding)
+        val processResult = execute(platformFactory(project), runningPath, parameters, env, encoding)
         when (processResult.returnCode) {
             // 0: no hint found; 1: hint found
-            0, 1 -> return GolangCiOutputParser.parseIssues(processResult)
+            0, 1 ->
+                return Gson().fromJson(processResult.stdout, LintReport::class.java)
+                    .Issues
+                    ?.sortedWith(compareBy({ issue -> issue.Pos.Filename }, { issue -> issue.Pos.Line }))
+                    ?: listOf()
             // run error
             else -> {
                 logger.warn("Run error: ${processResult.stderr}. Please make sure the project has no syntax error.")
@@ -411,7 +429,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                 val now = System.currentTimeMillis()
                 // freq cap 1min
                 if (showError && (notificationLastTime.get() + notificationFrequencyCap) < now) {
-                    logger.warn("Debug command: ${buildCommand(runningPath, parameters, env)}")
+                    logger.warn("Debug command: ${ platformFactory(project).buildCommand(parameters, runningPath, env) }")
 
                     val notification = when {
                         // syntax error or package not found, fix that first
@@ -439,7 +457,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                                     "Must enable at least one linter",
                                     NotificationType.ERROR).apply {
                                 this.addAction(NotificationAction.createSimple("Configure") {
-                                    ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
+                                    ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterConfigurable(project))
                                     this.expire()
                                 })
                             }
@@ -456,21 +474,21 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                         processResult.stderr.contains("error computing diff") ->
                             notificationGroup.createNotification(
                                     ErrorTitle,
-                                    "Diff is needed for running gofmt/goimports/gci. Either put <a href=\"https://ftp.gnu.org/gnu/diffutils/\">GNU diff</a> & <a href=\"https://ftp.gnu.org/pub/gnu/libiconv/\">GNU LibIconv</a> binary in PATH, or disable gofmt/goimports.",
+                                    "Diff is needed for running gofmt/goimports/gci. Either put <a href=\"https://ftp.gnu.org/gnu/diffutils/\">GNU diff</a> & <a href=\"https://ftp.gnu.org/pub/gnu/libiconv/\">GNU LibIconv</a> binary in PATH, or disable them",
                                     NotificationType.ERROR).apply {
                                 this.setListener(NotificationListener.URL_OPENING_LISTENER)
                                 this.addAction(NotificationAction.createSimple("Configure") {
-                                    ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
+                                    ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterConfigurable(project))
                                     this.expire()
                                 })
                             }
                         else ->
                             notificationGroup.createNotification(
                                     ErrorTitle,
-                                    "Please make sure no syntax or config error, then run 'go mod tidy' to make sure deps ok",
+                                    "Please make sure no syntax or config error, then run 'go mod tidy' to ensure deps ok",
                                     NotificationType.WARNING).apply {
                                 this.addAction(NotificationAction.createSimple("Configure") {
-                                    ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterSettings(project))
+                                    ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterConfigurable(project))
                                     this.expire()
                                 })
                             }
@@ -485,7 +503,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                     notificationLastTime.set(now)
                 }
 
-                // or skip current run
+                // as run failed, skip annotate and cache
                 throw Exception("run failed")
             }
         }

@@ -1,6 +1,7 @@
 package com.ypwang.plugin.form;
 
 import com.goide.configuration.GoSdkConfigurable;
+import com.intellij.execution.wsl.WslPath;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
@@ -27,10 +28,11 @@ import com.intellij.uiDesigner.core.GridConstraints;
 import com.intellij.util.ui.AsyncProcessIcon;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
-import com.ypwang.plugin.GoLinterConfig;
-import com.ypwang.plugin.GolangCiOutputParser;
+import com.ypwang.plugin.GoLinterSettings;
 import com.ypwang.plugin.UtilitiesKt;
 import com.ypwang.plugin.model.GoLinter;
+import com.ypwang.plugin.platform.Platform;
+import com.ypwang.plugin.platform.PlatformKt;
 import kotlin.Unit;
 import org.apache.commons.lang.StringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -57,7 +59,8 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-public class GoLinterSettings implements SearchableConfigurable, Disposable {
+public class GoLinterConfigurable implements SearchableConfigurable, Disposable {
+    private GoLinterSettings settings;
     private static final String CONFIG_HELP = "https://golangci-lint.run/usage/configuration/#config-file";
 
     private static final Set<String> suggestLinters =
@@ -96,6 +99,8 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
     @NotNull
     private final Project curProject;
     @NotNull
+    private Platform platform;
+    @NotNull
     private final List<GoLinter> allLinters = new ArrayList<>();
     @NotNull
     private final Set<String> enabledLinters = new HashSet<>();
@@ -104,8 +109,10 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     private boolean modified = false;
 
-    public GoLinterSettings(@NotNull Project project) {
+    public GoLinterConfigurable(@NotNull Project project) {
         curProject = project;
+        platform = PlatformKt.platformFactory(project);
+        settings = GoLinterSettings.getInstance(project);
 
         linterChooseComboBox.setRenderer(new FileExistCellRender());
         linterChooseComboBox.addActionListener(this::linterSelected);
@@ -121,16 +128,16 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         helpDocumentLabel = createLinkLabel(null, desktop -> desktop.browse(new URL(CONFIG_HELP).toURI()));
 
         fetchLatestReleasePopup = new JBPopupMenu();
-        fetchLatestReleasePopup.add(new JMenuItem(new AbstractAction(String.format("Download to %s", UtilitiesKt.getExecutionDir())) {
+        fetchLatestReleasePopup.add(new JMenuItem(new AbstractAction(String.format("Download to %s", platform.defaultPath())) {
             public void actionPerformed(ActionEvent e) {
-                fetchLatestExecutable(UtilitiesKt.getExecutionDir());
+                fetchLatestExecutable(platform.defaultPath());
             }
         }));
         fetchLatestReleasePopup.add(new JMenuItem(new AbstractAction("Select folder...") {
             public void actionPerformed(ActionEvent e) {
                 FileChooserDescriptor fileChooserDescriptor = new FileChooserDescriptor(false, true, false, false, false, false);
-                VirtualFile hint = LocalFileSystem.getInstance().findFileByPath(UtilitiesKt.getExecutionDir());
-                VirtualFile folder = FileChooser.chooseFile(fileChooserDescriptor, GoLinterSettings.this.settingPanel, null, hint);
+                VirtualFile hint = LocalFileSystem.getInstance().findFileByPath(platform.defaultPath());
+                VirtualFile folder = FileChooser.chooseFile(fileChooserDescriptor, GoLinterConfigurable.this.settingPanel, null, hint);
                 if (folder != null) {
                     fetchLatestExecutable(Paths.get(folder.getPath()).toString());
                 }
@@ -247,10 +254,10 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         if (pathStr != null) {
             Set<String> paths = new HashSet<>(Arrays.asList(pathStr.split(File.pathSeparator)));
             // special case: downloaded previously by this plugin
-            paths.add(UtilitiesKt.getExecutionDir());
+            paths.add(platform.defaultPath());
 
             return paths.stream()
-                    .map(path -> Paths.get(path, UtilitiesKt.getLinterExecutableName()))
+                    .map(path -> Paths.get(path, platform.linterName()))
                     .filter(fullPath -> fullPath.toFile().canExecute())
                     .map(Path::toString)
                     .collect(Collectors.toSet());
@@ -271,7 +278,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
         configFile.ifPresentOrElse(
                 f -> {
-                    // found an valid config file
+                    // found a valid config file
                     configLabel1 = createLinkLabel(String.format("Using %s", f), desktop -> desktop.open(new File(f)));
                     GridConstraints constraints = new GridConstraints(3, 0, 1, 3, 0, 1, 3, 0, null, null, null, 0, false);
                     settingPanel.add(configLabel1, constraints);
@@ -298,7 +305,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                                 curSelected = LocalFileSystem.getInstance().findFileByPath(configLabel2.getText());
                             }
 
-                            VirtualFile folder = FileChooser.chooseFile(fileChooserDescriptor, GoLinterSettings.this.settingPanel, null, curSelected);
+                            VirtualFile folder = FileChooser.chooseFile(fileChooserDescriptor, GoLinterConfigurable.this.settingPanel, null, curSelected);
                             if (folder != null) {
                                 String config = Paths.get(folder.getPath()).toString();
 
@@ -338,26 +345,24 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                     suggestButton.addActionListener(this::suggestLinters);
                     settingPanel.add(suggestButton, constraints);
 
-                    GoLinterConfig.INSTANCE.getCustomConfigFile().ifPresentOrElse(
-                            config -> {
-                                suggestButton.setEnabled(false);
-                                linterTable.setEnabled(false);
-                                configLabel2.setText(config);
-                                configLabel2.setListener((aSource, aLinkData) -> {
-                                    try {
-                                        Desktop.getDesktop().open(new File(config));
-                                    } catch (Exception e) {
-                                        // ignore
-                                    }
-                                }, null);
-                            },
-                            () -> {
-                                configLabel2.setText("");
-                                configLabel2.setListener(null, null);
-                                suggestButton.setEnabled(true);
-                                linterTable.setEnabled(true);
+                    String config = settings.getCustomConfigFile();
+                    if (config != null) {
+                        suggestButton.setEnabled(false);
+                        linterTable.setEnabled(false);
+                        configLabel2.setText(config);
+                        configLabel2.setListener((aSource, aLinkData) -> {
+                            try {
+                                Desktop.getDesktop().open(new File(config));
+                            } catch (Exception e) {
+                                // ignore
                             }
-                    );
+                        }, null);
+                    } else {
+                        configLabel2.setText("");
+                        configLabel2.setListener(null, null);
+                        suggestButton.setEnabled(true);
+                        linterTable.setEnabled(true);
+                    }
                 }
         );
     }
@@ -385,9 +390,9 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                         arguments.add(configLabel2.getText());
                     }
 
-                    allLinters.addAll(GolangCiOutputParser.INSTANCE.parseLinters(
+                    allLinters.addAll(UtilitiesKt.parseLinters(
                             curProject,
-                            GolangCiOutputParser.INSTANCE.runProcess(
+                            platform.runProcess(
                                 arguments,
                                 StringUtils.isNotEmpty(projectDir.getText()) ? projectDir.getText() : null,
                                 Collections.singletonMap("PATH", UtilitiesKt.getSystemPath(curProject)),
@@ -405,10 +410,9 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
                     );
                 }
 
-                String[] enabledLintersInConfig = GoLinterConfig.INSTANCE.getEnabledLinters();
-                if (enabledLintersInConfig != null && linterTable.isEnabled()) {
+                if (settings.getLinterSelected() && linterTable.isEnabled()) {
                     // previously selected linters
-                    enabledLinters.addAll(Arrays.stream(enabledLintersInConfig).collect(Collectors.toSet()));
+                    enabledLinters.addAll(settings.getEnabledLinters());
                 } else {
                     // default enabled linters
                     enabledLinters.addAll(allLinters.stream().filter(GoLinter::getDefaultEnabled).map(GoLinter::getName).collect(Collectors.toSet()));
@@ -467,31 +471,30 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
     @Override
     public void apply() {
-        GoLinterConfig.INSTANCE.setConcurrency((Integer) concurrencyComboBox.getSelectedItem());
+        settings.setConcurrency((Integer) concurrencyComboBox.getSelectedItem());
 
         if (linterChooseComboBox.getSelectedItem() != null) {
-            GoLinterConfig.INSTANCE.setGoLinterExe((String) linterChooseComboBox.getSelectedItem());
+            settings.setGoLinterExe((String) linterChooseComboBox.getSelectedItem());
         }
 
-        GoLinterConfig.INSTANCE.setEnableCustomProjectDir(projectRootCheckBox.isSelected());
-        Optional<String> customProjectDir;
-        if (curProject.getBasePath() != null && Paths.get(curProject.getBasePath()).toString().equals(projectDir.getText()))
-            customProjectDir = Optional.empty();
-        else
-            customProjectDir = Optional.ofNullable(projectDir.getText());
-        GoLinterConfig.INSTANCE.setCustomProjectDir(customProjectDir);
+        settings.setEnableCustomProjectDir(projectRootCheckBox.isSelected());
+        String customProjectDir = null;
+        if (curProject.getBasePath() == null || !Paths.get(curProject.getBasePath()).toString().equals(projectDir.getText()))
+            customProjectDir = projectDir.getText();
+
+        settings.setCustomProjectDir(customProjectDir);
 
         if (configLabel2 != null) {
-            Optional<String> customConfigPath;
-            if (configLabel2.getText().isEmpty())
-                customConfigPath = Optional.empty();
-            else
-                customConfigPath = Optional.ofNullable(configLabel2.getText());
-            GoLinterConfig.INSTANCE.setCustomConfigFile(customConfigPath);
+            String customConfigPath = null;
+            if (!configLabel2.getText().isEmpty())
+                customConfigPath = configLabel2.getText();
+            settings.setCustomConfigFile(customConfigPath);
         }
 
-        if (!enabledLinters.isEmpty()) {
-            GoLinterConfig.INSTANCE.setEnabledLinters(enabledLinters.toArray(new String[0]));
+        if (enabledLinters == allLinters.stream().filter(GoLinter::getDefaultEnabled).map(GoLinter::getName).collect(Collectors.toSet())) {
+            settings.setLinterSelected(false);
+        } else {
+            settings.setEnabledLinters(new ArrayList<>(enabledLinters));
         }
 
         lastSavedTime = System.currentTimeMillis();
@@ -515,20 +518,21 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
             DefaultComboBoxModel<Integer> model = new DefaultComboBoxModel<>();
             model.addAll(IntStream.rangeClosed(1, Runtime.getRuntime().availableProcessors()).boxed().collect(Collectors.toList()));
             concurrencyComboBox.setModel(model);
-            concurrencyComboBox.setSelectedItem(GoLinterConfig.INSTANCE.getConcurrency());
+            concurrencyComboBox.setSelectedItem(settings.getConcurrency());
         }
 
-        String dir = GoLinterConfig.INSTANCE.getCustomProjectDir().orElse(curProject.getBasePath());
-        if (dir == null) {
+        String dir = settings.getCustomProjectDir();
+        if (dir == null)
+            dir = curProject.getBasePath();
+        if (dir == null)
             dir = "";
-        }
-        projectRootCheckBox.setSelected(GoLinterConfig.INSTANCE.getEnableCustomProjectDir());
+        projectRootCheckBox.setSelected(settings.getEnableCustomProjectDir());
         projectDir.setText(Paths.get(dir).toString());
 
         resetPanel();
 
-        final String savedLinter = GoLinterConfig.INSTANCE.getGoLinterExe();
-        if (!savedLinter.equals(linterChooseComboBox.getSelectedItem())) {
+        final String savedLinter = settings.getGoLinterExe();
+        if (savedLinter != null && !savedLinter.equals(linterChooseComboBox.getSelectedItem())) {
             setLinterExecutables(savedLinter);
         } else {
             initializeLinters();
@@ -585,7 +589,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         FileChooserDescriptor fileChooserDescriptor = new FileChooserDescriptor(true, false, false, false, false, false);
 
         if (SystemInfo.isWindows) {
-            fileChooserDescriptor.withFileFilter((VirtualFile file) -> "exe".equalsIgnoreCase(file.getExtension()));
+            fileChooserDescriptor.withFileFilter((VirtualFile file) -> "exe".equalsIgnoreCase(file.getExtension()) || WslPath.isWslUncPath(file.getPath()));
         }
 
         VirtualFile curSelected = null;
@@ -593,7 +597,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
             curSelected = LocalFileSystem.getInstance().findFileByPath((String) linterChooseComboBox.getSelectedItem());
         }
 
-        VirtualFile file = FileChooser.chooseFile(fileChooserDescriptor, GoLinterSettings.this.settingPanel, null, curSelected);
+        VirtualFile file = FileChooser.chooseFile(fileChooserDescriptor, GoLinterConfigurable.this.settingPanel, null, curSelected);
 
         if (file != null) {
             // because `file.getPath()` returns linux path, seems weird on windows
@@ -613,7 +617,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
 
             setLinterExecutables(ProgressManager.getInstance().runProcessWithProgressSynchronously(() -> {
                 ProgressIndicator progressIndicator = ProgressManager.getInstance().getProgressIndicator();
-                return UtilitiesKt.fetchLatestGoLinter(
+                return platform.fetchLatestGoLinter(
                         folder,
                         (String s) -> {
                             progressIndicator.setText(s);
@@ -644,7 +648,7 @@ public class GoLinterSettings implements SearchableConfigurable, Disposable {
         FileChooserDescriptor fileChooserDescriptor = new FileChooserDescriptor(false, true, false, false, false, false);
 
         VirtualFile hint = LocalFileSystem.getInstance().findFileByPath(projectDir.getText());
-        VirtualFile folder = FileChooser.chooseFile(fileChooserDescriptor, GoLinterSettings.this.settingPanel, null, hint);
+        VirtualFile folder = FileChooser.chooseFile(fileChooserDescriptor, GoLinterConfigurable.this.settingPanel, null, hint);
         if (folder != null) {
             // because `file.getPath()` returns linux path, seems weird on windows
             String selected = Paths.get(folder.getPath()).toString();

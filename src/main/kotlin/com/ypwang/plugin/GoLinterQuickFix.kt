@@ -3,7 +3,8 @@ package com.ypwang.plugin
 import com.ypwang.plugin.handler.*
 
 // attempt to suggest auto-fix, if possible, clarify affected PsiElement for better inspection
-val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
+val quickFixHandler: Map<String, ProblemHandler> =
+    mutableMapOf(
         "ineffassign" to IneffAssignHandler,
         "gocritic" to GoCriticHandler,
         "interfacer" to InterfacerHandler,
@@ -19,7 +20,8 @@ val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "gomnd" to GoMndHandler,
         "staticcheck" to StaticCheckHandler,
         "goprintffuncname" to GoPrintfFuncNameHandler,
-//        "exhaustive" to ExhaustiveHandler,    // exhaustive is error prone
+        // exhaustive is error prone
+        // "exhaustive" to ExhaustiveHandler,
         "gosimple" to GoSimpleHandler,
         "scopelint" to explanationHandler("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/scopelint.md"),
         "goerr113" to explanationHandler("https://github.com/xxpxxxxp/intellij-plugin-golangci-lint/blob/master/explanation/goerr113.md"),
@@ -34,7 +36,9 @@ val quickFixHandler: Map<String, ProblemHandler> = mutableMapOf(
         "forcetypeassert" to ForceTypeAssertHandler,
         "predeclared" to PreDeclaredHandler,
         "varnamelen" to varNameLenHandler
-).apply {
-    this.putAll(listOf("structcheck", "varcheck", "deadcode", "unused").map { it to NamedElementHandler })
-    this.putAll(ProblemHandler.FuncLinters.map { it to funcNoLintHandler(it) })
-}
+    ).apply {
+        // they report issue of a definition or declaration
+        this.putAll(listOf("structcheck", "varcheck", "deadcode", "unused").map { it to NamedElementHandler })
+        // they report issue of whole function
+        this.putAll(listOf("cyclop", "funlen", "gocognit", "gochecknoinits", "gocyclo", "nakedret").map { it to funcNoLintHandler(it) })
+    }

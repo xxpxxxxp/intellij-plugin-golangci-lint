@@ -1,5 +1,7 @@
 package com.ypwang.plugin.form;
 
+import com.intellij.execution.wsl.WslPath;
+import com.intellij.openapi.util.SystemInfo;
 import com.intellij.ui.JBColor;
 
 import javax.swing.*;
@@ -13,12 +15,19 @@ class FileExistCellRender extends DefaultListCellRenderer {
 
     @Override
     public Component getListCellRendererComponent(JList jc, Object val, int idx, boolean isSelected, boolean cellHasFocus) {
-        if (val == null) setForeground(JBColor.BLACK);
-        else {
+        setText(null);
+        setForeground(JBColor.BLACK);
+        setIcon(null);
+
+        if (val != null) {
             String path = val.toString();
             setText(path);
-            if (new File(path).canExecute()) setForeground(JBColor.BLACK);
-            else setForeground(JBColor.RED);
+
+            if (SystemInfo.isWindows && WslPath.isWslUncPath(path))
+                setIcon(new ImageIcon(new ImageIcon(this.getClass().getResource("/images/wsl.png")).getImage().getScaledInstance(20, 20, Image.SCALE_SMOOTH)));
+            else if (!new File(path).canExecute()) {
+                setForeground(JBColor.RED);
+            }
         }
         return this;
     }
