@@ -36,17 +36,15 @@ dependencies {
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-    version = '221.5591.52'
+    version = '221.5787.30'
     type = 'IU'
-    plugins = ['org.jetbrains.plugins.go:221.5591.52']
+    plugins = ['org.jetbrains.plugins.go:221.5787.20']
     updateSinceUntilBuild = false
 }
 
 compileKotlin {
     kotlinOptions {
         jvmTarget = "11"
-        // Disable optimized callable references. See https://youtrack.jetbrains.com/issue/KT-37435
-        freeCompilerArgs += "-Xno-optimized-callable-references"
     }
 }
 

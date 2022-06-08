@@ -1,6 +1,7 @@
 package com.ypwang.plugin.form;
 
 import com.goide.configuration.GoSdkConfigurable;
+import com.goide.sdk.GoSdkService;
 import com.intellij.execution.wsl.WslPath;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
@@ -15,6 +16,7 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogBuilder;
 import com.intellij.openapi.ui.JBPopupMenu;
+import com.intellij.openapi.util.Condition;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.SystemInfo;
@@ -33,6 +35,8 @@ import com.ypwang.plugin.UtilitiesKt;
 import com.ypwang.plugin.model.GoLinter;
 import com.ypwang.plugin.platform.Platform;
 import com.ypwang.plugin.platform.PlatformKt;
+import com.ypwang.plugin.platform.WSL;
+import com.ypwang.plugin.platform.Windows;
 import kotlin.Unit;
 import org.apache.commons.lang.StringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -56,6 +60,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -68,7 +73,7 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
                     "gosimple", "govet", "ineffassign", "staticcheck", "bodyclose",
                     "dupl", "exportloopref", "funlen", "gocognit", "goconst", "revive",
                     "gocritic", "gocyclo", "goprintffuncname", "gosec", "interfacer",
-                    "maligned", "prealloc", "stylecheck", "unconvert", "whitespace", "errorlint"
+                    "maligned", "prealloc", "stylecheck", "whitespace", "errorlint"
             );
     private static long lastSavedTime = Long.MIN_VALUE;
 
@@ -80,7 +85,6 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
     private JComboBox<String> linterChooseComboBox;
     private JButton linterChooseButton;
     private JButton fetchLatestReleaseButton;
-    private JPopupMenu fetchLatestReleasePopup;
     private JLabel projectDir;
     private JButton customProjectSelectButton;
     private LinkLabel<String> configLabel1;
@@ -99,13 +103,13 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
     @NotNull
     private final Project curProject;
     @NotNull
-    private Platform platform;
+    private final Platform platform;
     @NotNull
     private final List<GoLinter> allLinters = new ArrayList<>();
     @NotNull
     private final Set<String> enabledLinters = new HashSet<>();
     @NotNull
-    private final Set<String> lintersInPath = getLinterFromPath();     // immutable
+    private final Set<String> lintersInPath;    // immutable
 
     private boolean modified = false;
 
@@ -120,6 +124,8 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
         linterChooseButton.addActionListener(e -> linterChoose());
         projectRootCheckBox.addItemListener(this::enableProjectRoot);
         customProjectSelectButton.addActionListener(e -> customProjectDir());
+
+        lintersInPath = getLinterFromPath();
     }
 
     @SuppressWarnings("unchecked")
@@ -127,26 +133,26 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
         // initialize components
         helpDocumentLabel = createLinkLabel(null, desktop -> desktop.browse(new URL(CONFIG_HELP).toURI()));
 
-        fetchLatestReleasePopup = new JBPopupMenu();
-        fetchLatestReleasePopup.add(new JMenuItem(new AbstractAction(String.format("Download to %s", platform.defaultPath())) {
-            public void actionPerformed(ActionEvent e) {
-                fetchLatestExecutable(platform.defaultPath());
-            }
-        }));
-        fetchLatestReleasePopup.add(new JMenuItem(new AbstractAction("Select folder...") {
-            public void actionPerformed(ActionEvent e) {
-                FileChooserDescriptor fileChooserDescriptor = new FileChooserDescriptor(false, true, false, false, false, false);
-                VirtualFile hint = LocalFileSystem.getInstance().findFileByPath(platform.defaultPath());
-                VirtualFile folder = FileChooser.chooseFile(fileChooserDescriptor, GoLinterConfigurable.this.settingPanel, null, hint);
-                if (folder != null) {
-                    fetchLatestExecutable(Paths.get(folder.getPath()).toString());
-                }
-            }
-        }));
         fetchLatestReleaseButton = new JButton();
         fetchLatestReleaseButton.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
+                JPopupMenu fetchLatestReleasePopup = new JBPopupMenu();
+                fetchLatestReleasePopup.add(new JMenuItem(new AbstractAction(String.format("Download to %s", platform.defaultPath())) {
+                    public void actionPerformed(ActionEvent e) {
+                        fetchLatestExecutable(platform.defaultPath());
+                    }
+                }));
+                fetchLatestReleasePopup.add(new JMenuItem(new AbstractAction("Select folder...") {
+                    public void actionPerformed(ActionEvent e) {
+                        FileChooserDescriptor fileChooserDescriptor = new FileChooserDescriptor(false, true, false, false, false, false);
+                        VirtualFile hint = LocalFileSystem.getInstance().findFileByPath(platform.defaultPath());
+                        VirtualFile folder = FileChooser.chooseFile(fileChooserDescriptor, GoLinterConfigurable.this.settingPanel, null, hint);
+                        if (folder != null) {
+                            fetchLatestExecutable(Paths.get(folder.getPath()).toString());
+                        }
+                    }
+                }));
                 fetchLatestReleasePopup.show(e.getComponent(), e.getX(), e.getY());
             }
         });
@@ -494,6 +500,7 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
         if (enabledLinters == allLinters.stream().filter(GoLinter::getDefaultEnabled).map(GoLinter::getName).collect(Collectors.toSet())) {
             settings.setLinterSelected(false);
         } else {
+            settings.setLinterSelected(true);
             settings.setEnabledLinters(new ArrayList<>(enabledLinters));
         }
 
@@ -532,7 +539,7 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
         resetPanel();
 
         final String savedLinter = settings.getGoLinterExe();
-        if (savedLinter != null && !savedLinter.equals(linterChooseComboBox.getSelectedItem())) {
+        if (!savedLinter.equals(linterChooseComboBox.getSelectedItem())) {
             setLinterExecutables(savedLinter);
         } else {
             initializeLinters();
@@ -552,7 +559,6 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
         UIUtil.dispose(this.linterChooseComboBox);
         UIUtil.dispose(this.linterChooseButton);
         UIUtil.dispose(this.fetchLatestReleaseButton);
-        UIUtil.dispose(this.fetchLatestReleasePopup);
         UIUtil.dispose(this.projectRootCheckBox);
         UIUtil.dispose(this.projectDir);
         UIUtil.dispose(this.customProjectSelectButton);
@@ -566,7 +572,6 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
         UIUtil.dispose(this.refreshProcessIcon);
         UIUtil.dispose(this.linterTable);
         this.fetchLatestReleaseButton = null;
-        this.fetchLatestReleasePopup = null;
         this.configLabel1 = null;
         this.suggestButton = null;
         this.configLabel2 = null;
@@ -588,9 +593,14 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
     private void linterChoose() {
         FileChooserDescriptor fileChooserDescriptor = new FileChooserDescriptor(true, false, false, false, false, false);
 
-        if (SystemInfo.isWindows) {
-            fileChooserDescriptor.withFileFilter((VirtualFile file) -> "exe".equalsIgnoreCase(file.getExtension()) || WslPath.isWslUncPath(file.getPath()));
-        }
+        Condition<VirtualFile> filter;
+        if (platform instanceof Windows)
+            filter = file -> "exe".equalsIgnoreCase(file.getExtension());
+        else if (platform instanceof WSL)
+            filter = file -> WslPath.isWslUncPath(file.getPath());
+        else
+            filter = file -> platform.canExecute(file.getPath());
+        fileChooserDescriptor.withFileFilter(filter);
 
         VirtualFile curSelected = null;
         if (linterChooseComboBox.getSelectedItem() != null) {

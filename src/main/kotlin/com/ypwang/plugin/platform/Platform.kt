@@ -1,5 +1,7 @@
 package com.ypwang.plugin.platform
 
+import com.goide.sdk.GoSdkService
+import com.intellij.execution.wsl.WslPath
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
 import com.ypwang.plugin.fetchProcessOutput
@@ -19,7 +21,11 @@ internal const val LinterName = "golangci-lint"
 fun platformFactory(project: Project): Platform =
     when {
         SystemInfo.isWindows -> {
-            Windows()
+            val goRoot = GoSdkService.getInstance(project).getSdk(null).sdkRoot
+            if (goRoot != null && WslPath.isWslUncPath(goRoot.path))
+                WSL(goRoot.path)
+            else
+                Windows()
         }
         SystemInfo.isLinux -> Linux()
         SystemInfo.isMac -> Mac()

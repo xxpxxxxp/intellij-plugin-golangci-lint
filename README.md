@@ -36,17 +36,19 @@ The default setting works perfectly
 * I'm using Intellij Ultimate, I have a Go project nested in sub-dir  
 Select `Project Root` to the Go project path
 * I have multiple Go sub-projects in the root project  
-Uncheck `Project Root`. **Be aware that only the config file directly under the root project will be used.**
+Uncheck `Project Root`. **Be aware that only the config file directly under the project root will be used.**
 * I want to use a config file not under root project  
 Select `Using config:` to the config file
 
-### For Windows users
-Please disable goimports / gofmt / gci linters. Use [File-Watcher](https://tech.flyclops.com/posts/2016-06-14-goimports-intellij.html) in IDEA.  
-*If you insist using those 3 linters, download <a href="http://ftp.gnu.org/gnu/diffutils/">GNU diff</a> & <a href="https://ftp.gnu.org/pub/gnu/libiconv/">GNU LibIconv</a> and put them in system PATH (eg: C:\WINDOWS). Normally it's missing from the system.*
+### WSL Guide (Windows Subsystem for Linux)
+First, please set a valid **GOROOT** in WSL, then go back to `Go Linter` setting to select a WSL linter executable.
 
-## Report a bug
-* Please note down your platform (Win/Linux/Mac), IDEA/Goland version, Go version
-* If the plugin reports an error, please copy-paste the error content
+![](explanation/wsl.png)
 
-## Next
-* Code quality improvement
+### For Windows Users
+Please disable `goimports` / `gofmt` / `gci` linters. Instead, use Goland or [File-Watcher](https://tech.flyclops.com/posts/2016-06-14-goimports-intellij.html) to format your code.  
+*If you still want to use those 3 linters with the plugin, download <a href="http://ftp.gnu.org/gnu/diffutils/">GNU diff</a> & <a href="https://ftp.gnu.org/pub/gnu/libiconv/">GNU LibIconv</a> and put them in system PATH (eg: C:\WINDOWS).*
+
+## Report Bug
+* Please kindly note down your platform (Win/Linux/Mac), IDEA/Goland version and Go version
+* If the plugin reports an error, please also copy-paste the error content

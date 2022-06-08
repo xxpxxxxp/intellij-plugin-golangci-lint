@@ -107,7 +107,6 @@ fun fetchProcessOutput(process: Process, encoding: Charset): RunProcessResult {
     return RunProcessResult(-1, "", "")
 }
 
-
 fun parseLinters(project: Project, result: RunProcessResult): List<GoLinter> {
     when (result.returnCode) {
         0 -> {

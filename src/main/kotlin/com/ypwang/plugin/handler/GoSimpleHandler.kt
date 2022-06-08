@@ -23,6 +23,20 @@ object GoSimpleHandler : ProblemHandler() {
                         // it's safe to rewrite to if statement, to keeping variable life circles
                         arrayOf<IntentionAction>(GoSimplifySimpleChanSelectFix(element)) to element.select.textRange
                     }
+                "S1001" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoForStatement ->
+                        if (element.rangeClause != null && element.block?.statementList?.singleOrNull() is GoAssignmentStatement) {
+                            val source = element.rangeClause!!.rangeExpression!!.text
+                            val dest = ((element.block!!.statementList.single() as GoAssignmentStatement)
+                                .leftHandExprList
+                                .expressionList
+                                .single() as GoIndexOrSliceExpr)
+                                .expression!!.text
+
+                            arrayOf<IntentionAction>(GoReplaceElementFix("copy($dest, $source)", element, GoExpression::class.java)) to element.`for`.textRange
+                        } else
+                            NonAvailableFix
+                    }
                 // should omit comparison to bool constant, can be simplified to `...`
                 "S1002" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoConditionalExpr ->
@@ -81,20 +95,27 @@ object GoSimpleHandler : ProblemHandler() {
                         }
                         else NonAvailableFix
                     }
-                // should replace loop with `...`"
-                "S1011" -> chainFindAndHandle(file, document, issue, overrideLine) { element: GoForStatement ->
-                    return arrayOf<IntentionAction>(GoReplaceElementFix(extractQuote(issue.Text).single(), element, GoAssignmentStatement::class.java)) to element.`for`.textRange
-                }
-                // should use `time.Since` instead of `time.Now().Sub`
-                "S1012" -> chainFindAndHandle(file, document, issue, overrideLine) { element: GoReferenceExpression ->
-                    if (element.parent is GoReferenceExpression &&
-                            element.parent.parent is GoCallExpr) {
-                        val expr = element.parent.parent.parent
-                        if (expr is GoReferenceExpression && expr.text == "time.Now().Sub")
-                            return arrayOf<IntentionAction>(GoReplaceElementFix("time.Since", expr, GoExpression::class.java)) to expr.textRange
+                // should omit nil check; len() for xxxx is defined as zero
+                "S1009" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoOrExpr ->
+                        return arrayOf<IntentionAction>(GoReplaceElementFix(element.right!!.text, element, GoExpression::class.java)) to element.textRange
                     }
-                    NonAvailableFix
-                }
+                // should replace loop with `...`"
+                "S1011" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoForStatement ->
+                        return arrayOf<IntentionAction>(GoReplaceElementFix(extractQuote(issue.Text).single(), element, GoAssignmentStatement::class.java)) to element.`for`.textRange
+                    }
+                // should use `time.Since` instead of `time.Now().Sub`
+                "S1012" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoReferenceExpression ->
+                        if (element.parent is GoReferenceExpression &&
+                                element.parent.parent is GoCallExpr) {
+                            val expr = element.parent.parent.parent
+                            if (expr is GoReferenceExpression && expr.text == "time.Now().Sub")
+                                return arrayOf<IntentionAction>(GoReplaceElementFix("time.Since", expr, GoExpression::class.java)) to expr.textRange
+                        }
+                        NonAvailableFix
+                    }
                 // should merge variable declaration with assignment on next line
                 "S1021" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoVarDeclaration ->

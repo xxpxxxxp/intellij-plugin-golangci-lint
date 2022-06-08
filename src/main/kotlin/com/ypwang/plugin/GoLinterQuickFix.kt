@@ -30,6 +30,8 @@ val quickFixHandler: Map<String, ProblemHandler> =
         "makezero" to explanationHandler("https://github.com/ashanbrown/makezero#purpose"),
         "thelper" to explanationHandler("https://github.com/kulti/thelper#why"),
         "durationcheck" to explanationHandler("https://github.com/charithe/durationcheck#duration-check"),
+        "ireturn" to explanationHandler("https://mycodesmells.com/post/accept-interfaces-return-struct-in-go"),
+        "containedctx" to explanationHandler("https://go.dev/blog/context-and-structs"),
         "nlreturn" to NlReturnHandler,
         "errorlint" to ErrorLintHandler,
         "ifshort" to IfShortHandler,
