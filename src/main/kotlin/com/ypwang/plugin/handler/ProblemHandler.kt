@@ -12,7 +12,6 @@ abstract class ProblemHandler {
     companion object {
         val EmptyLocalQuickFix = arrayOf<IntentionAction>()
         val NonAvailableFix = EmptyLocalQuickFix to null
-
     }
 
     protected fun calcPos(document: Document, issue: LintIssue, overrideLine: Int): Int =

@@ -41,14 +41,13 @@ Uncheck `Project Root`. **Be aware that only the config file directly under the 
 Select `Using config:` to the config file
 
 ### WSL Guide (Windows Subsystem for Linux)
-First, please set a valid **GOROOT** in WSL, then go back to `Go Linter` setting to select a WSL linter executable.
-
-![](explanation/wsl.png)
+Work in Progress!
 
 ### For Windows Users
 Please disable `goimports` / `gofmt` / `gci` linters. Instead, use Goland or [File-Watcher](https://tech.flyclops.com/posts/2016-06-14-goimports-intellij.html) to format your code.  
 *If you still want to use those 3 linters with the plugin, download <a href="http://ftp.gnu.org/gnu/diffutils/">GNU diff</a> & <a href="https://ftp.gnu.org/pub/gnu/libiconv/">GNU LibIconv</a> and put them in system PATH (eg: C:\WINDOWS).*
 
+>>>>>>> 32fba9a (support per-project project)
 ## Report Bug
 * Please kindly note down your platform (Win/Linux/Mac), IDEA/Goland version and Go version
 * If the plugin reports an error, please also copy-paste the error content

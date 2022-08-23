@@ -153,12 +153,12 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
         // cache not found or outdated
         // ====================================================================================================================================
         return try {
-            val params = buildParameters(file, project, settings, relativePath)
+            val moduleOn = if (getModuleOn(ModuleUtilCore.findModuleForFile(file))) "on" else "off"
             val issues = runAndProcessResult(
                 project,
                 runningPath,
-                params,
-                mapOf("PATH" to getSystemPath(project), "GOPATH" to getGoPath(project)),
+                buildParameters(file, project, settings, relativePath),
+                mapOf("PATH" to getSystemPath(project), "GOPATH" to getGoPath(project), "GO111MODULE" to moduleOn),
                 file.virtualFile.charset
             )
             synchronized(cache) {

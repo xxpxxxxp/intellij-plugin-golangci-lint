@@ -171,6 +171,10 @@ class GoLinterSettingsTracker : StartupActivity.DumbAware {
                 )
                 this.expire()
             })
+            this.addAction(NotificationAction.createSimple("Don't show for this project") {
+                GoLinterSettings.getInstance(project).checkGoLinterExe = false
+                this.expire()
+            })
         }.notify(project)
     }
 }

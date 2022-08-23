@@ -1,6 +1,7 @@
 package com.ypwang.plugin
 
 import com.goide.project.GoApplicationLibrariesService
+import com.goide.project.GoModuleSettings
 import com.goide.project.GoProjectLibrariesService
 import com.goide.sdk.GoSdkService
 import com.google.common.io.CharStreams
@@ -8,6 +9,7 @@ import com.google.gson.Gson
 import com.intellij.notification.NotificationGroup
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.module.Module
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.ypwang.plugin.model.GithubRelease
@@ -25,6 +27,7 @@ private const val notificationGroupName = "Go linter notifications"
 private val configFiles = arrayOf(".golangci.json", ".golangci.toml", ".golangci.yaml", ".golangci.yml")  // ordered by precedence
 private val systemPath = System.getenv("PATH")
 private val systemGoPath = System.getenv("GOPATH")      // immutable in current idea process
+private val systemModuleOn = Objects.equals("on", System.getenv("GO111MODULE"))
 
 val logger = Logger.getInstance("go-linter")
 val notificationGroup: NotificationGroup = NotificationGroupManager.getInstance().getNotificationGroup(notificationGroupName)
@@ -51,7 +54,7 @@ fun getSystemPath(project: Project): String {
     val goExecutable = GoSdkService.getInstance(project).getSdk(null).executable?.path ?: return systemPath
     // IDE GOROOT should take precedence
     val goBin = Paths.get(goExecutable).parent.toString()
-    return if (systemPath.isBlank()) goBin else "${goBin}{File.pathSeparatorChar}$systemPath"
+    return if (systemPath.isBlank()) goBin else "$goBin${File.pathSeparator}$systemPath"
 }
 
 fun getGoPath(project: Project): String {
@@ -65,6 +68,14 @@ fun getGoPath(project: Project): String {
         paths = paths + systemGoPath
 
     return paths.joinToString(File.pathSeparator)
+}
+
+fun getModuleOn(module: Module?): Boolean {
+    if (module != null)
+        if (GoModuleSettings.getInstance(module).isGoSupportEnabled)
+            return true
+
+    return systemModuleOn
 }
 
 private class OutputReader(val inputStream: InputStream, val consumer: ByteArrayOutputStream) : Runnable {
