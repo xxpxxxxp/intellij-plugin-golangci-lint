@@ -19,6 +19,7 @@ class GoShortenParameterFix(element: GoFunctionOrMethodDeclaration)
         val signature = (startElement as GoFunctionOrMethodDeclaration).signature!!
         signature.replace(GoElementFactory.createFunctionSignatureFromText(
             project,
+            "",
             shorten(signature.parameters),
             signature.result?.type?.text ?: signature.result?.parameters?.let { shorten(it) } ?: "",
             null,
