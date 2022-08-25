@@ -43,13 +43,14 @@ class GoLinterSettingsTracker : StartupActivity.DumbAware {
                     // for backward capability, try both
                     for (str in listOf(result.stderr, result.stdout).filter { it.isNotEmpty() }) {
                         try {
-                            val version = Gson().fromJson(str, GolangciLintVersion::class.java).version
+                            val version = gson.fromJson(str, GolangciLintVersion::class.java).version
                             checkExecutableUpdate(version, project)
                             return
                         } catch (e: JsonSyntaxException) {
                             // skip parse fail
                         }
                     }
+
                 2 -> {
                     // panic!
                     if (isGo18(project))
@@ -85,7 +86,7 @@ class GoLinterSettingsTracker : StartupActivity.DumbAware {
     }
 
     private fun checkExecutableUpdate(curVersion: String, project: Project) {
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "check golangci-lint updates") {
+        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Check golangci-lint updates") {
             override fun run(pi: ProgressIndicator) {
                 pi.isIndeterminate = true
 
@@ -134,7 +135,7 @@ class GoLinterSettingsTracker : StartupActivity.DumbAware {
             // update action
             this.addAction(NotificationAction.createSimple("Update in background") {
                 ProgressManager.getInstance().run(
-                    object : Task.Backgroundable(project, "update golangci-lint") {
+                    object : Task.Backgroundable(project, "Update golangci-lint") {
                         override fun run(indicator: ProgressIndicator) {
                             try {
                                 platform.fetchLatestGoLinter(
@@ -161,7 +162,7 @@ class GoLinterSettingsTracker : StartupActivity.DumbAware {
                             } catch (e: Exception) {
                                 // update failed!
                                 notificationGroup.createNotification(
-                                    "update golangci-lint failed",
+                                    "Update golangci-lint failed",
                                     "Error: ${e.message}",
                                     NotificationType.ERROR
                                 ).notify(project)

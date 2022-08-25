@@ -26,11 +26,13 @@ import java.util.*
 private const val notificationGroupName = "Go linter notifications"
 private val configFiles = arrayOf(".golangci.json", ".golangci.toml", ".golangci.yaml", ".golangci.yml")  // ordered by precedence
 private val systemPath = System.getenv("PATH")
-private val systemGoPath = System.getenv("GOPATH")      // immutable in current idea process
+private val systemGoPath = System.getenv("GOPATH")      // immutable in a current IDEA process
 private val systemModuleOn = Objects.equals("on", System.getenv("GO111MODULE"))
 
 val logger = Logger.getInstance("go-linter")
 val notificationGroup: NotificationGroup = NotificationGroupManager.getInstance().getNotificationGroup(notificationGroupName)
+
+val gson = Gson()
 
 fun findCustomConfigInPath(path: String?): Optional<String> {
     val varPath: String? = path
@@ -123,11 +125,13 @@ fun parseLinters(project: Project, result: RunProcessResult): List<GoLinter> {
         0 -> {
             // continue
         }
+
         2 ->
             if (isGo18(project))
                 throw Exception("Incompatible golangci-lint with Go1.18, please update to version after 1.45.0")
             else
                 throw Exception("golangci-lint panic: $result")
+
         else ->
             throw Exception("Failed to Discover Linters: $result")
     }
@@ -170,16 +174,16 @@ fun parseLinters(project: Project, result: RunProcessResult): List<GoLinter> {
 }
 
 fun getLatestReleaseMeta(httpClient: CloseableHttpClient): GithubRelease =
-        Gson().fromJson(
-            httpClient.execute(HttpGet("https://api.github.com/repos/golangci/golangci-lint/releases/latest")).use { response ->
-                CharStreams.toString(InputStreamReader(response.entity.content, Charset.defaultCharset()))
-            },
-            GithubRelease::class.java
-        )
+    gson.fromJson(
+        httpClient.execute(HttpGet("https://api.github.com/repos/golangci/golangci-lint/releases/latest")).use { response ->
+            CharStreams.toString(InputStreamReader(response.entity.content, Charset.defaultCharset()))
+        },
+        GithubRelease::class.java
+    )
 
 fun isGo18(project: Project): Boolean {
-    val sdk = GoSdkService.getInstance(project).getSdk(null)
-    return sdk.version != null && compareVersion(sdk.version!!, "1.18") >= 0
+    val sdkVersion = GoSdkService.getInstance(project).getSdk(null).version
+    return sdkVersion != null && compareVersion(sdkVersion, "1.18") >= 0
 }
 
 fun compareVersion(v1: String, v2: String): Int =

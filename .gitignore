@@ -1,5 +1,8 @@
 # Intellij cache
-.idea
+.idea/*
+!.idea/externalDependencies.xml
+
+# Gradle
 .gradle
 build/
 project/

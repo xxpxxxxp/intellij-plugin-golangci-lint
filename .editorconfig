@@ -1,0 +1,14 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_size = tab
+indent_style = space
+insert_final_newline = false
+max_line_length = 150
+tab_width = 4
+ij_smart_tabs = true
+
+[*.java]
+ij_any_if_brace_force = if_multiline
