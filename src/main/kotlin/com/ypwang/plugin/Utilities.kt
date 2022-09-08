@@ -1,15 +1,14 @@
 package com.ypwang.plugin
 
 import com.goide.project.GoApplicationLibrariesService
-import com.goide.project.GoModuleSettings
 import com.goide.project.GoProjectLibrariesService
 import com.goide.sdk.GoSdkService
+import com.goide.vgo.configuration.VgoProjectSettings
 import com.google.common.io.CharStreams
 import com.google.gson.Gson
 import com.intellij.notification.NotificationGroup
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.module.Module
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.ypwang.plugin.model.GithubRelease
@@ -70,13 +69,7 @@ fun getGoPath(project: Project): String {
     return paths.joinToString(File.pathSeparator)
 }
 
-fun getModuleOn(module: Module?): Boolean {
-    if (module != null)
-        if (GoModuleSettings.getInstance(module).isGoSupportEnabled)
-            return true
-
-    return systemModuleOn
-}
+fun getModuleOn(project: Project): Boolean = VgoProjectSettings.getInstance(project).isIntegrationEnabled || systemModuleOn
 
 private class OutputReader(val inputStream: InputStream, val consumer: ByteArrayOutputStream) : Runnable {
     override fun run() = try {

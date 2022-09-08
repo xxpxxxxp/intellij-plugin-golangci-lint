@@ -153,7 +153,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
         // cache not found or outdated
         // ====================================================================================================================================
         return try {
-            val moduleOn = if (getModuleOn(ModuleUtilCore.findModuleForFile(file))) "on" else "off"
+            val moduleOn = if (getModuleOn(project)) "on" else "off"
             val issues = runAndProcessResult(
                 project,
                 runningPath,
