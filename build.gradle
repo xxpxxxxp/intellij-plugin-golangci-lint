@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'org.jetbrains.intellij' version '1.9.0'
-    id 'org.jetbrains.kotlin.jvm' version '1.7.10'
+    id 'org.jetbrains.kotlin.jvm' version '1.7.21'
 }
 
 static def gitTag() {
@@ -30,26 +30,20 @@ repositories {
     mavenCentral()
 }
 
-dependencies {
-    compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:1.7.10'
-}
-
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-    version = '222.3739.54'
+    version = '222.4345.14'
     type = 'IU'
-    plugins = ['org.jetbrains.plugins.go:222.3739.40']
+    plugins = ['org.jetbrains.plugins.go:222.4345.14']
     updateSinceUntilBuild = false
 }
 
 compileKotlin {
-    kotlinOptions {
-        jvmTarget = "11"
-    }
+    kotlinOptions.jvmTarget = "17"
 }
 
 compileTestKotlin {
-    kotlinOptions.jvmTarget = "11"
+    kotlinOptions.jvmTarget = "17"
 }
 
 def changeLog() {

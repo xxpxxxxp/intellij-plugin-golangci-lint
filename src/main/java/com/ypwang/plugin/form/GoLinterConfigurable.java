@@ -596,8 +596,6 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
         Condition<VirtualFile> filter;
         if (platform instanceof Windows)
             filter = file -> "exe".equalsIgnoreCase(file.getExtension());
-        else if (platform instanceof WSL)
-            filter = file -> WslPath.isWslUncPath(file.getPath());
         else
             filter = file -> platform.canExecute(file.getPath());
         fileChooserDescriptor.withFileFilter(filter);

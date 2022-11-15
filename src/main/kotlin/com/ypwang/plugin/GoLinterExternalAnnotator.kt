@@ -94,10 +94,9 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
     override fun collectInformation(file: PsiFile): PsiFile? =
         runReadAction {
             val project = file.project
-            val platform = platformFactory(project)
-            if (file.isValid && file.virtualFile != null && file is GoFile &&
+            if (file is GoFile && file.isValid && file.virtualFile != null &&
                 // valid linter executable
-                platform.canExecute(GoLinterSettings.getInstance(project).goLinterExe))
+                platformFactory(project).canExecute(GoLinterSettings.getInstance(project).goLinterExe))
                 file
             else
                 null

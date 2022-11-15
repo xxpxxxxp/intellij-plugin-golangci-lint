@@ -154,6 +154,15 @@ object GoSimpleHandler : ProblemHandler() {
                     arrayOf<IntentionAction>(GoBringToExplanationFix(
                             "https://github.com/dominikh/go-tools/issues/723",
                             "See 'S1030: don't flag m[string(buf.Bytes()]'")) to null
+                // S1038: should use b.Fatalf(...) instead of b.Fatal(fmt.Sprintf(...))
+                "S1038" ->
+                    chainFindAndHandle(file, document, issue, overrideLine) { element: GoCallExpr ->
+                        if (element.argumentList.expressionList.size == 1 && element.argumentList.expressionList.single()!! is GoCallExpr)
+                            arrayOf<IntentionAction>(GoReplaceElementFix(
+                                "${element.expression.text}f${(element.argumentList.expressionList.single() as GoCallExpr).argumentList.text}",
+                                element, GoCallExpr::class.java)) to element.textRange
+                        else NonAvailableFix
+                    }
                 // unnecessary use of fmt.Sprintf
                 "S1039" ->
                     chainFindAndHandle(file, document, issue, overrideLine) { element: GoCallExpr ->

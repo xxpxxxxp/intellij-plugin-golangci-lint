@@ -1,5 +1,7 @@
 package com.ypwang.plugin.platform
 
+import com.goide.sdk.GoSdkService
+import com.intellij.execution.wsl.WslPath
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
 import com.ypwang.plugin.fetchProcessOutput
@@ -14,15 +16,13 @@ import java.io.InputStream
 import java.nio.charset.Charset
 import java.nio.file.Paths
 
-internal const val LinterName = "golangci-lint"
-
 fun platformFactory(project: Project): Platform =
     when {
         SystemInfo.isWindows -> {
-//            val goRoot = GoSdkService.getInstance(project).getSdk(null).sdkRoot
-//            if (goRoot != null && WslPath.isWslUncPath(goRoot.path))
-//                WSL(goRoot.path)
-//            else
+            val goRoot = GoSdkService.getInstance(project).getSdk(null).sdkRoot
+            if (goRoot != null && WslPath.isWslUncPath(goRoot.path))
+                WSL(goRoot.path)
+            else
                 Windows()
         }
         SystemInfo.isLinux -> Linux()
@@ -30,8 +30,20 @@ fun platformFactory(project: Project): Platform =
         else -> throw Exception("Unknown system type: ${SystemInfo.OS_NAME}")
     }
 
-interface Platform {
-    fun runProcess(params: List<String>, runningDir: String?, env: Map<String, String>, encoding: Charset = Charset.defaultCharset()): RunProcessResult =
+abstract class Platform {
+    companion object {
+        const val LinterName = "golangci-lint"
+    }
+
+    protected abstract fun os(): String
+    protected abstract fun suffix(): String
+    protected abstract fun tempPath(): String
+    protected abstract fun decompress(compressed: String, targetFile: String, to: String, setFraction: (Double) -> Unit, cancelled: () -> Boolean)
+    abstract fun buildCommand(params: List<String>, runningDir: String?, env: Map<String, String>): String
+    abstract fun linterName(): String
+    abstract fun defaultPath(): String
+
+    open fun runProcess(params: List<String>, runningDir: String?, env: Map<String, String>, encoding: Charset = Charset.defaultCharset()): RunProcessResult =
         fetchProcessOutput(
             ProcessBuilder(params).apply {
                 val curEnv = this.environment()
@@ -41,9 +53,8 @@ interface Platform {
             }.start(),
             encoding
         )
-    fun buildCommand(params: List<String>, runningDir: String?, env: Map<String, String>): String
 
-    fun arch(): String = System.getProperty("os.arch").let {
+    private fun arch(): String = System.getProperty("os.arch").let {
         when (it) {
             "x86" -> "386"
             "amd64", "x86_64" -> "amd64"
@@ -85,31 +96,25 @@ interface Platform {
         }
     }
 
-    fun os(): String
-    fun suffix(): String
-    fun linterName(): String
-    fun tempPath(): String
-    fun defaultPath(): String
-    fun decompress(compressed: String, targetFile: String, to: String, setFraction: (Double) -> Unit, cancelled: () -> Boolean)
-
-    fun canExecute(path: String): Boolean = File(path).canExecute()
-    fun canWrite(path: String): Boolean = File(path).canWrite()
+    open fun canExecute(path: String): Boolean = File(path).canExecute()
+    open fun canWrite(path: String): Boolean = File(path).canWrite()
     fun parentFolder(path: String): String = File(path).parent
-}
 
-// nio should be more efficient, but let's show some progress to make programmer happy
-internal fun copy(input: InputStream, to: String, totalSize: Long, setFraction: (Double) -> Unit, cancelled: () -> Boolean) {
-    FileOutputStream(to).use { fos ->
-        var sum = 0.0
-        var len: Int
-        val data = ByteArray(20 * 1024)
+    // nio should be more efficient, but let's show some progress to make programmer happy
+    fun copy(input: InputStream, to: String, totalSize: Long, setFraction: (Double) -> Unit, cancelled: () -> Boolean) {
+        FileOutputStream(to).use { fos ->
+            var sum = 0.0
+            var len: Int
+            val data = ByteArray(20 * 1024)
 
-        while (!cancelled()) {
-            len = input.read(data)
-            if (len == -1) break
-            fos.write(data, 0, len)
-            sum += len
-            setFraction(minOf(sum / totalSize, 1.0))
+            while (!cancelled()) {
+                len = input.read(data)
+                if (len == -1)
+                    break
+                fos.write(data, 0, len)
+                sum += len
+                setFraction(minOf(sum / totalSize, 1.0))
+            }
         }
     }
 }

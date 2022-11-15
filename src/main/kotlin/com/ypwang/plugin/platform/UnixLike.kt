@@ -5,22 +5,9 @@ import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.util.zip.GZIPInputStream
 
-abstract class UnixLikePlatform: Platform {
-    override fun buildCommand(params: List<String>, runningDir: String?, env: Map<String, String>): String =
-        StringBuilder().apply {
-            runningDir?.let {
-                this.append("cd $it && ")    // open into working dir
-            }
-            for ((k, v) in env)              // set env
-                this.append("export $k=$v && ")
-            this.append(params.joinToString(" "){ "'$it'" })
-        }.toString()
-
+abstract class UnixLikePlatform: Platform() {
     override fun suffix(): String = "tar.gz"
-    override fun linterName(): String = LinterName
     override fun tempPath(): String = "/tmp"
-    override fun defaultPath(): String = "/usr/local/bin"
-
     override fun decompress(compressed: String, targetFile: String, to: String, setFraction: (Double) -> Unit, cancelled: () -> Boolean) {
         TarArchiveInputStream(GZIPInputStream(FileInputStream(compressed))).use { tis ->
             var tarEntry = tis.nextTarEntry
@@ -35,9 +22,20 @@ abstract class UnixLikePlatform: Platform {
         }
         throw FileNotFoundException(targetFile)
     }
+    override fun buildCommand(params: List<String>, runningDir: String?, env: Map<String, String>): String =
+        StringBuilder().apply {
+            runningDir?.let {
+                this.append("cd $it && ")    // open into working dir
+            }
+            for ((k, v) in env)              // set env
+                this.append("export $k=$v && ")
+            this.append(params.joinToString(" "){ "'$it'" })
+        }.toString()
+    override fun linterName(): String = LinterName
+    override fun defaultPath(): String = "/usr/local/bin"
 }
 
-class Linux: UnixLikePlatform() {
+open class Linux: UnixLikePlatform() {
     override fun os(): String = "linux"
 }
 
