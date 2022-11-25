@@ -32,9 +32,9 @@ repositories {
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-    version = '222.4345.14'
+    version = '222.4459.24'
     type = 'IU'
-    plugins = ['org.jetbrains.plugins.go:222.4345.14']
+    plugins = ['org.jetbrains.plugins.go:222.4459.24']
     updateSinceUntilBuild = false
 }
 

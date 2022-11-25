@@ -15,12 +15,15 @@ import com.intellij.openapi.startup.StartupActivity
 import com.ypwang.plugin.form.GoLinterConfigurable
 import com.ypwang.plugin.model.GithubRelease
 import com.ypwang.plugin.model.GolangciLintVersion
-import com.ypwang.plugin.platform.platformFactory
+import com.ypwang.plugin.platform.Platform.Companion.platformFactory
 import org.apache.http.client.config.RequestConfig
 import org.apache.http.impl.client.HttpClientBuilder
+import java.io.File
 
 class GoLinterSettingsTracker : StartupActivity.DumbAware {
     override fun runActivity(project: Project) {
+        return
+
         try {
             val settings = GoLinterSettings.getInstance(project)
             if (!settings.checkGoLinterExe)
@@ -33,22 +36,16 @@ class GoLinterSettingsTracker : StartupActivity.DumbAware {
             }
 
             val result = platform.runProcess(
-                listOf(settings.goLinterExe, "version", "--format", "json"),
+                listOf(platform.toRunningOSPath(settings.goLinterExe), "version", "--format", "json"),
                 null,
-                mapOf("PATH" to getSystemPath(project))
+                listOf(Const_Path)
             )
             when (result.returnCode) {
                 0 ->
-                    // golangci-lint has switched the output between stdout and stderr
-                    // for backward capability, try both
-                    for (str in listOf(result.stderr, result.stdout).filter { it.isNotEmpty() }) {
-                        try {
-                            val version = Gson().fromJson(str, GolangciLintVersion::class.java).version
-                            checkExecutableUpdate(version, project)
-                            return
-                        } catch (e: JsonSyntaxException) {
-                            // skip parse fail
-                        }
+                    try {
+                        checkExecutableUpdate(Gson().fromJson(result.stdout, GolangciLintVersion::class.java).version, project)
+                    } catch (e: JsonSyntaxException) {
+                        // skip parse fail
                     }
                 2 -> {
                     // panic!
@@ -58,7 +55,6 @@ class GoLinterSettingsTracker : StartupActivity.DumbAware {
                             "Please update golangci-lint after v1.45.0",
                             NotificationType.INFORMATION
                         ).notify(project)
-                    return
                 }
             }
         } catch (ignore: Throwable) {
@@ -138,9 +134,9 @@ class GoLinterSettingsTracker : StartupActivity.DumbAware {
                         override fun run(indicator: ProgressIndicator) {
                             try {
                                 platform.fetchLatestGoLinter(
-                                    platform.parentFolder(dest),
-                                    { s -> indicator.text = s },
-                                    { f -> indicator.fraction = f },
+                                    File(dest).parent,
+                                    { indicator.text = it },
+                                    { indicator.fraction = it },
                                     { indicator.isCanceled }
                                 )
 

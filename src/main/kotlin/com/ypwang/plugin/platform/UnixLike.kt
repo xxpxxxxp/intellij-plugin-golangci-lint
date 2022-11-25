@@ -1,13 +1,15 @@
 package com.ypwang.plugin.platform
 
+import com.intellij.openapi.project.Project
+import com.ypwang.plugin.model.GithubRelease
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.util.zip.GZIPInputStream
 
-abstract class UnixLikePlatform: Platform() {
-    override fun suffix(): String = "tar.gz"
+abstract class UnixLikePlatform(project: Project) : Platform(project) {
     override fun tempPath(): String = "/tmp"
+    // decompress .tar.gz
     override fun decompress(compressed: String, targetFile: String, to: String, setFraction: (Double) -> Unit, cancelled: () -> Boolean) {
         TarArchiveInputStream(GZIPInputStream(FileInputStream(compressed))).use { tis ->
             var tarEntry = tis.nextTarEntry
@@ -22,23 +24,25 @@ abstract class UnixLikePlatform: Platform() {
         }
         throw FileNotFoundException(targetFile)
     }
-    override fun buildCommand(params: List<String>, runningDir: String?, env: Map<String, String>): String =
+    // quote path/variable/param to avoid break by space
+    override fun buildCommand(params: List<String>, runningDir: String?, vars: List<String>): String =
         StringBuilder().apply {
-            runningDir?.let {
-                this.append("cd $it && ")    // open into working dir
-            }
-            for ((k, v) in env)              // set env
-                this.append("export $k=$v && ")
-            this.append(params.joinToString(" "){ "'$it'" })
+            // open into working dir
+            if (runningDir != null)
+                this.append("cd '$runningDir' && ")
+            // set env
+            getEnvMap(vars).forEach { (k, v) -> this.append("export $k='$v' && ") }
+            // quote all params
+            this.append(params.joinToString(" ") { "'$it'" })
         }.toString()
     override fun linterName(): String = LinterName
     override fun defaultPath(): String = "/usr/local/bin"
 }
 
-open class Linux: UnixLikePlatform() {
-    override fun os(): String = "linux"
+open class Linux(project: Project) : UnixLikePlatform(project) {
+    override fun getPlatformSpecificBinName(meta: GithubRelease): String = "${LinterName}-${meta.name.substring(1)}-linux-${arch()}.tar.gz"
 }
 
-class Mac: UnixLikePlatform() {
-    override fun os(): String = "darwin"
+class Mac(project: Project) : UnixLikePlatform(project) {
+    override fun getPlatformSpecificBinName(meta: GithubRelease): String = "${LinterName}-${meta.name.substring(1)}-darwin-${arch()}.tar.gz"
 }

@@ -1,8 +1,6 @@
 package com.ypwang.plugin.form;
 
 import com.goide.configuration.GoSdkConfigurable;
-import com.goide.sdk.GoSdkService;
-import com.intellij.execution.wsl.WslPath;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
@@ -19,7 +17,6 @@ import com.intellij.openapi.ui.JBPopupMenu;
 import com.intellij.openapi.util.Condition;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Pair;
-import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.components.JBLabel;
@@ -34,8 +31,6 @@ import com.ypwang.plugin.GoLinterSettings;
 import com.ypwang.plugin.UtilitiesKt;
 import com.ypwang.plugin.model.GoLinter;
 import com.ypwang.plugin.platform.Platform;
-import com.ypwang.plugin.platform.PlatformKt;
-import com.ypwang.plugin.platform.WSL;
 import com.ypwang.plugin.platform.Windows;
 import kotlin.Unit;
 import org.apache.commons.lang.StringUtils;
@@ -52,17 +47,19 @@ import java.awt.event.ItemEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
+import java.io.IOException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static com.ypwang.plugin.ConstantsKt.Const_Path;
 
 public class GoLinterConfigurable implements SearchableConfigurable, Disposable {
     private GoLinterSettings settings;
@@ -115,7 +112,7 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
 
     public GoLinterConfigurable(@NotNull Project project) {
         curProject = project;
-        platform = PlatformKt.platformFactory(project);
+        platform = Platform.Companion.platformFactory(project);
         settings = GoLinterSettings.getInstance(project);
 
         linterChooseComboBox.setRenderer(new FileExistCellRender());
@@ -256,20 +253,12 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
 
     // return golangci-lint executables in PATH
     private Set<String> getLinterFromPath() {
-        String pathStr = System.getenv("PATH");
-        if (pathStr != null) {
-            Set<String> paths = new HashSet<>(Arrays.asList(pathStr.split(File.pathSeparator)));
-            // special case: downloaded previously by this plugin
-            paths.add(platform.defaultPath());
-
-            return paths.stream()
-                    .map(path -> Paths.get(path, platform.linterName()))
-                    .filter(fullPath -> fullPath.toFile().canExecute())
-                    .map(Path::toString)
-                    .collect(Collectors.toSet());
-        }
-
-        return Collections.emptySet();
+        List<String> paths = new ArrayList<>(platform.getPathList());
+        paths.add(platform.defaultPath());
+        return paths.stream()
+                .map(path -> Paths.get(path, platform.linterName()).toString())
+                .filter(platform::canExecute)
+                .collect(Collectors.toSet());
     }
 
     private void resetPanel() {
@@ -388,20 +377,20 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
             if (selectedLinter != null && new File(selectedLinter).canExecute()) {
                 try {
                     List<String> arguments = new ArrayList<>();
-                    arguments.add(selectedLinter);
+                    arguments.add(platform.toRunningOSPath(selectedLinter));
                     arguments.add("linters");
 
                     if (configLabel2 != null && !configLabel2.getText().isEmpty()) {
                         arguments.add("-c");
-                        arguments.add(configLabel2.getText());
+                        arguments.add(platform.toRunningOSPath(configLabel2.getText()));
                     }
 
                     allLinters.addAll(UtilitiesKt.parseLinters(
                             curProject,
                             platform.runProcess(
                                 arguments,
-                                StringUtils.isNotEmpty(projectDir.getText()) ? projectDir.getText() : null,
-                                Collections.singletonMap("PATH", UtilitiesKt.getSystemPath(curProject)),
+                                StringUtils.isNotEmpty(projectDir.getText()) ? platform.toRunningOSPath(projectDir.getText()) : null,
+                                Collections.singletonList(Const_Path),
                                 Charset.defaultCharset()
                             )
                     ));
@@ -450,7 +439,7 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
             }
         }
 
-        void acceptThrows(T elem) throws Exception;
+        void acceptThrows(T elem) throws IOException, URISyntaxException;
     }
 
     private LinkLabel<String> createLinkLabel(@Nullable String text, ThrowingConsumer<Desktop> onClick) {
@@ -523,7 +512,7 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
     public void reset() {
         {
             DefaultComboBoxModel<Integer> model = new DefaultComboBoxModel<>();
-            model.addAll(IntStream.rangeClosed(1, Runtime.getRuntime().availableProcessors()).boxed().collect(Collectors.toList()));
+            model.addAll(IntStream.rangeClosed(1, Runtime.getRuntime().availableProcessors()).boxed().toList());
             concurrencyComboBox.setModel(model);
             concurrencyComboBox.setSelectedItem(settings.getConcurrency());
         }

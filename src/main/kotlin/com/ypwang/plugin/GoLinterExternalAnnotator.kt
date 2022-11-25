@@ -30,7 +30,7 @@ import com.ypwang.plugin.model.LintIssue
 import com.ypwang.plugin.model.LintReport
 import com.ypwang.plugin.model.RunProcessResult
 import com.ypwang.plugin.platform.Platform
-import com.ypwang.plugin.platform.platformFactory
+import com.ypwang.plugin.platform.Platform.Companion.platformFactory
 import java.io.File
 import java.nio.charset.Charset
 import java.nio.file.Paths
@@ -113,25 +113,26 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
             // file is not in current Go project, skip
             return null
 
-        // runningPath:  the working folder of golangci-lint
+        val platform = platformFactory(project)
+        // runningPath:  the golangci-lint running dir
         // relativePath: the run target folder
-        // matchName:    to match the output of golangci-lint
+        // matchName:    the file to match the output lint, to work with WSL, match name must be converted to platform specified
         val (runningPath, relativePath, matchName) =
             if (settings.enableCustomProjectDir) {
                 Triple(
                     projectPath.toString(),
-                    projectPath.relativize(absolutePath.parent).toString().ifBlank { "." }, // the relative path of file's dir to running dir
-                    projectPath.relativize(absolutePath).toString()                         // the relative path of file to running dir
+                    projectPath.relativize(absolutePath.parent).toString().ifBlank { "." },         // the relative path of file's dir to running dir
+                    platform.convertToPlatformPath(projectPath.relativize(absolutePath).toString()) // the relative path of file to running dir
                 )
             } else {
                 Triple(
-                    absolutePath.parent.toString(),     // file's absolute dir
+                    absolutePath.parent.toString(),     // absolute file dir
                     ".",
                     absolutePath.fileName.toString()    // relative file name
                 )
             }
 
-        // cachePath: the absolute path of file's dir, as the cache key
+        // cachePath: the absolute path of file dir, as the cache key
         val cachePath = absolutePath.parent.toString()
         run {
             // see if cached
@@ -152,12 +153,12 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
         // cache not found or outdated
         // ====================================================================================================================================
         return try {
-            val moduleOn = if (getModuleOn(project)) "on" else "off"
             val issues = runAndProcessResult(
                 project,
-                runningPath,
-                buildParameters(file, project, settings, relativePath),
-                mapOf("PATH" to getSystemPath(project), "GOPATH" to getGoPath(project), "GO111MODULE" to moduleOn),
+                platform,
+                platform.toRunningOSPath(runningPath),
+                buildParameters(file, project, platform, settings, relativePath),
+                listOf(Const_Path, Const_GoPath, Const_GoModule),
                 file.virtualFile.charset
             )
             synchronized(cache) {
@@ -275,9 +276,9 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
         return saved
     }
 
-    private fun buildParameters(file: PsiFile, project: Project, settings: GoLinterSettings, targetDir: String): List<String> {
+    private fun buildParameters(file: PsiFile, project: Project, platform: Platform, settings: GoLinterSettings, targetDir: String): List<String> {
         val parameters = mutableListOf(
-            settings.goLinterExe, "run",
+            platform.toRunningOSPath(settings.goLinterExe), "run",
             "--out-format", "json",
             "--allow-parallel-runners",
             // control concurrency
@@ -294,7 +295,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
             .ifPresentOrElse(
                     {
                         parameters.add("-c")
-                        parameters.add(it)
+                        parameters.add(platform.toRunningOSPath(it))
                     },
                     {
                         parameters.add("--no-config")
@@ -336,9 +337,8 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
 
     // executionLock must be hold during the whole time of execution
     // wake up backlog thread if there's any, or release executionLock
-    private fun executeAndWakeBacklogThread(platform: Platform, runningPath: String, parameters: List<String>, env: Map<String, String>, encoding: Charset): RunProcessResult {
-        val result = platform.runProcess(parameters, runningPath, env, encoding)
-
+    private fun executeAndWakeBacklogThread(platform: Platform, runningPath: String, parameters: List<String>, vars: List<String>, encoding: Charset): RunProcessResult {
+        val result = platform.runProcess(parameters, runningPath, vars, encoding)
         val workload = workloadsLock.withLock {
             if (workLoads.isNotEmpty()) {
                 val kv = workLoads.first()
@@ -359,18 +359,18 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
         return result
     }
 
-    private fun execute(platform: Platform, runningPath: String, parameters: List<String>, env: Map<String, String>, encoding: Charset): RunProcessResult {
+    private fun execute(platform: Platform, runningPath: String, parameters: List<String>, vars: List<String>, encoding: Charset): RunProcessResult {
         // main execution logic: 1. FIFO; 2. De-dup in backlog
         if (executionLock.compareAndSet(false, true))
             // own the execution lock, run immediately
-            return executeAndWakeBacklogThread(platform, runningPath, parameters, env, encoding)
+            return executeAndWakeBacklogThread(platform, runningPath, parameters, vars, encoding)
 
         // had to wait, add to backlog
         val (foundInBacklog, workload) = workloadsLock.withLock {
             // double check
             if (executionLock.compareAndSet(false, true))
                 // working thread released executionLock, so there's no backlog now, run immediately
-                return executeAndWakeBacklogThread(platform, runningPath, parameters, env, encoding)
+                return executeAndWakeBacklogThread(platform, runningPath, parameters, vars, encoding)
 
             var found = true
             var wl = workLoads[runningPath]
@@ -394,7 +394,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
             workload.executionCondition.await()
             workload.executionMutex.unlock()
             // executionLock guaranteed
-            workload.result = executeAndWakeBacklogThread(platform, runningPath, parameters, env, encoding)
+            workload.result = executeAndWakeBacklogThread(platform, runningPath, parameters, vars, encoding)
             // wake up backlog threads listen on me
             workload.broadcastMutex.lock()
             workload.broadcastCondition.signalAll()
@@ -408,12 +408,13 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
     // return null if run failed
     private fun runAndProcessResult(
         project: Project,
+        platform: Platform,
         runningPath: String,
         parameters: List<String>,
-        env: Map<String, String>,
+        vars: List<String>,
         encoding: Charset
     ): List<LintIssue> {
-        val processResult = execute(platformFactory(project), runningPath, parameters, env, encoding)
+        val processResult = execute(platform, runningPath, parameters, vars, encoding)
         when (processResult.returnCode) {
             // 0: no hint found; 1: hint found
             0, 1 ->
@@ -428,7 +429,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                 val now = System.currentTimeMillis()
                 // freq cap 1min
                 if (showError && (notificationLastTime.get() + notificationFrequencyCap) < now) {
-                    logger.warn("Debug command: ${ platformFactory(project).buildCommand(parameters, runningPath, env) }")
+                    logger.warn("Debug command: ${ platform.buildCommand(parameters, runningPath, vars) }")
 
                     val notification = when {
                         // syntax error or package not found, fix that first

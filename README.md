@@ -41,7 +41,18 @@ Uncheck `Project Root`. **Be aware that only the config file directly under the 
 Select `Using config:` to the config file
 
 ### WSL Guide (Windows Subsystem for Linux)
-Work in Progress!
+If you get `typecheck` error even with successful `go build`, please install `gcc` in WSL:
+```bash
+# Ubuntu/Debian
+sudo apt install build-essential
+# Arch/Manjaro
+sudo pacman -S gcc
+
+# Red Hat/Fedora/CentOS
+sudo yum groupinstall 'Development Tools'
+# or with dnf
+sudo dnf groupinstall 'Development Tools'
+```
 
 ### For Windows Users
 Please disable `goimports` / `gofmt` / `gci` linters. Instead, use Goland or [File-Watcher](https://tech.flyclops.com/posts/2016-06-14-goimports-intellij.html) to format your code.  
