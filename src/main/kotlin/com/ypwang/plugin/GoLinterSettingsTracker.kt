@@ -1,7 +1,6 @@
 package com.ypwang.plugin
 
 import com.google.gson.Gson
-import com.google.gson.JsonSyntaxException
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationListener
 import com.intellij.notification.NotificationType
@@ -22,44 +21,64 @@ import java.io.File
 
 class GoLinterSettingsTracker : StartupActivity.DumbAware {
     override fun runActivity(project: Project) {
-        return
+        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Check golangci-lint version and updates") {
+            override fun run(pi: ProgressIndicator) {
+                pi.isIndeterminate = true
 
-        try {
-            val settings = GoLinterSettings.getInstance(project)
-            if (!settings.checkGoLinterExe)
-                return
+                try {
+                    val settings = GoLinterSettings.getInstance(project)
+                    if (!settings.checkGoLinterExe)
+                        return
 
-            val platform = platformFactory(project)
-            if (!platform.canExecute(settings.goLinterExe)) {
-                noExecutableNotification(project)
-                return
-            }
-
-            val result = platform.runProcess(
-                listOf(platform.toRunningOSPath(settings.goLinterExe), "version", "--format", "json"),
-                null,
-                listOf(Const_Path)
-            )
-            when (result.returnCode) {
-                0 ->
-                    try {
-                        checkExecutableUpdate(Gson().fromJson(result.stdout, GolangciLintVersion::class.java).version, project)
-                    } catch (e: JsonSyntaxException) {
-                        // skip parse fail
+                    val platform = platformFactory(project)
+                    if (!platform.canExecute(settings.goLinterExe)) {
+                        noExecutableNotification(project)
+                        return
                     }
-                2 -> {
-                    // panic!
-                    if (isGo18(project))
-                        notificationGroup.createNotification(
-                            "Incompatible golangci-lint with Go1.18",
-                            "Please update golangci-lint after v1.45.0",
-                            NotificationType.INFORMATION
-                        ).notify(project)
+
+                    val result = platform.runProcess(
+                        listOf(platform.toRunningOSPath(settings.goLinterExe), "version", "--format", "json"),
+                        null,
+                        listOf(Const_Path)
+                    )
+                    when (result.returnCode) {
+                        0 ->
+                            try {
+                                val curVersion = Gson().fromJson(result.stdout, GolangciLintVersion::class.java).version
+                                val timeout = 3000  // 3000ms
+                                val latestMeta = HttpClientBuilder.create()
+                                    .disableContentCompression()
+                                    .setDefaultRequestConfig(
+                                        RequestConfig.custom()
+                                            .setConnectTimeout(timeout)
+                                            .setConnectionRequestTimeout(timeout)
+                                            .setSocketTimeout(timeout).build()
+                                    )
+                                    .build()
+                                    .use { getLatestReleaseMeta(it) }
+                                if (!curVersion.matches(Regex("""\d+\.\d+\.\d+""")))
+                                    updateNotification(project, "golangci-lint is custom built: $curVersion", latestMeta)
+                                else if (compareVersion(latestMeta.name.substring(1), curVersion) > 0)
+                                    updateNotification(project, "golangci-lint update available", latestMeta)
+                            } catch (e: Exception) {
+                                // ignore
+                            }
+
+                        2 -> {
+                            // panic!
+                            if (isGo18(project))
+                                notificationGroup.createNotification(
+                                    "Incompatible golangci-lint with Go1.18",
+                                    "Please update golangci-lint after v1.45.0",
+                                    NotificationType.INFORMATION
+                                ).notify(project)
+                        }
+                    }
+                } catch (ignore: Throwable) {
+                    // ignore
                 }
             }
-        } catch (ignore: Throwable) {
-            // ignore
-        }
+        })
     }
 
     private fun noExecutableNotification(project: Project) {
@@ -78,35 +97,6 @@ class GoLinterSettingsTracker : StartupActivity.DumbAware {
                 this.expire()
             })
         }.notify(project)
-    }
-
-    private fun checkExecutableUpdate(curVersion: String, project: Project) {
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "check golangci-lint updates") {
-            override fun run(pi: ProgressIndicator) {
-                pi.isIndeterminate = true
-
-                try {
-                    val timeout = 3000  // 3000ms
-                    val latestMeta = HttpClientBuilder.create()
-                        .disableContentCompression()
-                        .setDefaultRequestConfig(
-                            RequestConfig.custom()
-                                .setConnectTimeout(timeout)
-                                .setConnectionRequestTimeout(timeout)
-                                .setSocketTimeout(timeout).build()
-                        )
-                        .build()
-                        .use { getLatestReleaseMeta(it) }
-                    val latestVersion = latestMeta.name.substring(1)
-                    if (!curVersion.matches(Regex("""\d+\.\d+\.\d+""")))
-                        updateNotification(project, "golangci-lint is custom built: $curVersion", latestMeta)
-                    else if (compareVersion(latestVersion, curVersion) > 0)
-                        updateNotification(project, "golangci-lint update available", latestMeta)
-                } catch (e: Exception) {
-                    // ignore
-                }
-            }
-        })
     }
 
     private fun updateNotification(project: Project, title: String, latestMeta: GithubRelease) {
@@ -130,9 +120,10 @@ class GoLinterSettingsTracker : StartupActivity.DumbAware {
             // update action
             this.addAction(NotificationAction.createSimple("Update in background") {
                 ProgressManager.getInstance().run(
-                    object : Task.Backgroundable(project, "update golangci-lint") {
+                    object : Task.Backgroundable(project, "Update golangci-lint") {
                         override fun run(indicator: ProgressIndicator) {
                             try {
+                                indicator.isIndeterminate = false
                                 platform.fetchLatestGoLinter(
                                     File(dest).parent,
                                     { indicator.text = it },
@@ -157,7 +148,7 @@ class GoLinterSettingsTracker : StartupActivity.DumbAware {
                             } catch (e: Exception) {
                                 // update failed!
                                 notificationGroup.createNotification(
-                                    "update golangci-lint failed",
+                                    "Update golangci-lint failed",
                                     "Error: ${e.message}",
                                     NotificationType.ERROR
                                 ).notify(project)

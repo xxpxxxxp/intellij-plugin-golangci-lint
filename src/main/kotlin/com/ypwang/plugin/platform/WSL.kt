@@ -8,6 +8,7 @@ import com.ypwang.plugin.Const_GoModule
 import com.ypwang.plugin.Const_GoPath
 import com.ypwang.plugin.Const_Path
 import com.ypwang.plugin.model.RunProcessResult
+import java.io.File
 import java.nio.charset.Charset
 
 // host OS:    Windows
@@ -23,10 +24,10 @@ class WSL(project: Project, private val distribution: WSLDistribution): Linux(pr
         )
     }
 
+    override fun tempPath(): String = System.getenv("TEMP")
     // WSL util will log the executed command
     override fun buildCommand(params: List<String>, runningDir: String?, vars: List<String>): String =
         "Please search above log with 'command on wsl: ', Or match with regex: '(?<=command on wsl: ).*(?= was failed)' in supported editor like VSCode/Sublime/IDE"
-
     override fun defaultPath(): String = distribution.getWindowsPath(super.defaultPath())
     override fun pathSeparator(): String = pathSeparator
     // Windows relative path to Linux
@@ -34,14 +35,9 @@ class WSL(project: Project, private val distribution: WSLDistribution): Linux(pr
     // not include mounted paths, and convert to host OS path
     override fun getPathList(): List<String> = super.getPathList().filter { !it.startsWith(distribution.mntRoot) }.map(distribution::getWindowsPath)
     // check whether this host OS path is available in current WSL distribution
-    private fun isWSLAvailablePath(path: String): Boolean =
-        try {
-            distribution.getWslPath(path) != null
-        } catch (_: Exception) {
-            false
-        }
+    private fun isWSLAvailablePath(path: String): Boolean = WslPath.getDistributionByWindowsUncPath(path)?.equals(distribution) ?: true
     // cannot easily check executable and writeable, just check if available
-    override fun canExecute(path: String): Boolean = isWSLAvailablePath(path)
+    override fun canExecute(path: String): Boolean = isWSLAvailablePath(path) && File(path).isFile
     override fun canWrite(path: String): Boolean = isWSLAvailablePath(path)
     override fun toRunningOSPath(path: String): String = distribution.getWslPath(path)!!
     // get env variables inside WSL

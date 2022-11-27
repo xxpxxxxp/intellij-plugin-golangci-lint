@@ -1,9 +1,12 @@
 package com.ypwang.plugin
 
-import org.junit.*
 import com.google.gson.Gson
-
-import com.ypwang.plugin.model.*
+import com.ypwang.plugin.model.LintIssue
+import com.ypwang.plugin.model.LintReport
+import com.ypwang.plugin.model.Linter
+import com.ypwang.plugin.model.Position
+import org.junit.Assert
+import org.junit.Test
 
 class LintReportParseTest {
     @Test

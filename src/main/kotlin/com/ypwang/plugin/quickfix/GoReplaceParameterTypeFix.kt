@@ -49,7 +49,7 @@ class GoReplaceParameterTypeFix(
             }, "Add import", null)
         }
 
-        // JB got an weird issue if directly replace lastChild
+        // JB got a weird issue if directly replace lastChild
         startElement.deleteChildRange(startElement.lastChild, startElement.lastChild)
         startElement.add(GoElementFactory.createExpression(project, shortName))
     }

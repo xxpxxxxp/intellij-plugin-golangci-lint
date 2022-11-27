@@ -121,8 +121,10 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
             if (settings.enableCustomProjectDir) {
                 Triple(
                     projectPath.toString(),
-                    projectPath.relativize(absolutePath.parent).toString().ifBlank { "." },         // the relative path of file's dir to running dir
-                    platform.convertToPlatformPath(projectPath.relativize(absolutePath).toString()) // the relative path of file to running dir
+                    // the relative path of file's dir to running dir
+                    platform.convertToPlatformPath(projectPath.relativize(absolutePath.parent).toString().ifBlank { "." }),
+                    // the relative path of file to running dir
+                    platform.convertToPlatformPath(projectPath.relativize(absolutePath).toString())
                 )
             } else {
                 Triple(

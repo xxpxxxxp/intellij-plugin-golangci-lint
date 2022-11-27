@@ -11,6 +11,7 @@ import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogBuilder;
 import com.intellij.openapi.ui.JBPopupMenu;
@@ -51,7 +52,6 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.*;
@@ -105,8 +105,6 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
     private final List<GoLinter> allLinters = new ArrayList<>();
     @NotNull
     private final Set<String> enabledLinters = new HashSet<>();
-    @NotNull
-    private final Set<String> lintersInPath;    // immutable
 
     private boolean modified = false;
 
@@ -121,8 +119,6 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
         linterChooseButton.addActionListener(e -> linterChoose());
         projectRootCheckBox.addItemListener(this::enableProjectRoot);
         customProjectSelectButton.addActionListener(e -> customProjectDir());
-
-        lintersInPath = getLinterFromPath();
     }
 
     @SuppressWarnings("unchecked")
@@ -240,25 +236,29 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
     // if `selected` not in combo list, add it into combo list
     // set combo box to `selected`
     private void setLinterExecutables(@NotNull String selected) {
-        Vector<String> items = new Vector<>(lintersInPath);
+        ProgressManager.getInstance().run(new Task.Backgroundable(curProject, "Reset") {
+            @Override
+            public void run(@NotNull ProgressIndicator indicator) {
+                List<String> paths = new ArrayList<>(platform.getPathList());
+                paths.add(platform.defaultPath());
+                // get golangci-lint executables in PATH
+                Vector<String> items = paths.stream()
+                        .map(path -> Paths.get(path, platform.linterName()).toString())
+                        .filter(platform::canExecute)
+                        .distinct()
+                        .collect(Collectors.toCollection(Vector::new));
 
-        if (!lintersInPath.contains(selected)) {
-            items.add(selected);
-        }
+                if (!items.contains(selected)) {
+                    items.add(selected);
+                }
 
-        DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>(items);
-        linterChooseComboBox.setModel(model);
-        linterChooseComboBox.setSelectedItem(selected);
-    }
-
-    // return golangci-lint executables in PATH
-    private Set<String> getLinterFromPath() {
-        List<String> paths = new ArrayList<>(platform.getPathList());
-        paths.add(platform.defaultPath());
-        return paths.stream()
-                .map(path -> Paths.get(path, platform.linterName()).toString())
-                .filter(platform::canExecute)
-                .collect(Collectors.toSet());
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>(items);
+                    linterChooseComboBox.setModel(model);
+                    linterChooseComboBox.setSelectedItem(selected);
+                }, ModalityState.stateForComponent(linterChooseComboBox));
+            }
+        });
     }
 
     private void resetPanel() {
@@ -388,10 +388,10 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
                     allLinters.addAll(UtilitiesKt.parseLinters(
                             curProject,
                             platform.runProcess(
-                                arguments,
-                                StringUtils.isNotEmpty(projectDir.getText()) ? platform.toRunningOSPath(projectDir.getText()) : null,
-                                Collections.singletonList(Const_Path),
-                                Charset.defaultCharset()
+                                    arguments,
+                                    StringUtils.isNotEmpty(projectDir.getText()) ? platform.toRunningOSPath(projectDir.getText()) : null,
+                                    Collections.singletonList(Const_Path),
+                                    Charset.defaultCharset()
                             )
                     ));
                 } catch (Exception e) {
@@ -589,17 +589,18 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
             filter = file -> platform.canExecute(file.getPath());
         fileChooserDescriptor.withFileFilter(filter);
 
-        VirtualFile curSelected = null;
-        if (linterChooseComboBox.getSelectedItem() != null) {
-            curSelected = LocalFileSystem.getInstance().findFileByPath((String) linterChooseComboBox.getSelectedItem());
+        String hintPath = (String) linterChooseComboBox.getSelectedItem();
+        if (hintPath == null || hintPath.isEmpty()) {
+            hintPath = platform.defaultPath();
         }
 
-        VirtualFile file = FileChooser.chooseFile(fileChooserDescriptor, GoLinterConfigurable.this.settingPanel, null, curSelected);
+        VirtualFile file = FileChooser.chooseFile(fileChooserDescriptor, GoLinterConfigurable.this.settingPanel, null,
+                LocalFileSystem.getInstance().findFileByPath(hintPath));
 
         if (file != null) {
             // because `file.getPath()` returns linux path, seems weird on windows
             String systemPath = Paths.get(file.getPath()).toString();
-            if (curSelected == null || !systemPath.equals(curSelected.getPath()))
+            if (!systemPath.equals(hintPath))
                 modified = true;
 
             setLinterExecutables(systemPath);
@@ -608,12 +609,13 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
 
     private void fetchLatestExecutable(String folder) {
         try {
-            if (!Files.isWritable(Paths.get(folder))) {
+            if (!platform.canWrite(folder)) {
                 throw new NoPermissionException(String.format("cannot write to %s", folder));
             }
 
             setLinterExecutables(ProgressManager.getInstance().runProcessWithProgressSynchronously(() -> {
                 ProgressIndicator progressIndicator = ProgressManager.getInstance().getProgressIndicator();
+                progressIndicator.setIndeterminate(false);
                 return platform.fetchLatestGoLinter(
                         folder,
                         (String s) -> {

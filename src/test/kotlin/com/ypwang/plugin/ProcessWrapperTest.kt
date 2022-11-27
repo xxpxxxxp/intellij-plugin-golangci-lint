@@ -1,7 +1,7 @@
 package com.ypwang.plugin
 
-import org.junit.Test
 import org.junit.Assert
+import org.junit.Test
 import java.nio.charset.Charset
 
 class ProcessWrapperTest {

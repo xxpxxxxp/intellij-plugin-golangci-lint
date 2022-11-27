@@ -41,7 +41,8 @@ Uncheck `Project Root`. **Be aware that only the config file directly under the 
 Select `Using config:` to the config file
 
 ### WSL Guide (Windows Subsystem for Linux)
-If you get `typecheck` error even with successful `go build`, please install `gcc` in WSL:
+Please make sure `GOROOT` is set in IDE before config plugin settings.  
+If you get `typecheck` error even with successful `go build`, please install `gcc` inside WSL:
 ```bash
 # Ubuntu/Debian
 sudo apt install build-essential
