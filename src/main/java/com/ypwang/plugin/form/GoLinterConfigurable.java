@@ -512,7 +512,8 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
     public void reset() {
         {
             DefaultComboBoxModel<Integer> model = new DefaultComboBoxModel<>();
-            model.addAll(IntStream.rangeClosed(1, Runtime.getRuntime().availableProcessors()).boxed().toList());
+            // Jetbrains runtime doesn't support Stream.toList() yet
+            model.addAll(IntStream.rangeClosed(1, Runtime.getRuntime().availableProcessors()).boxed().collect(Collectors.toList()));
             concurrencyComboBox.setModel(model);
             concurrencyComboBox.setSelectedItem(settings.getConcurrency());
         }
