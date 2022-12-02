@@ -256,7 +256,7 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
                     DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>(items);
                     linterChooseComboBox.setModel(model);
                     linterChooseComboBox.setSelectedItem(selected);
-                }, ModalityState.stateForComponent(linterChooseComboBox));
+                }, ModalityState.any());
             }
         });
     }
