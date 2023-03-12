@@ -194,4 +194,9 @@ abstract class Platform(protected val project: Project) {
             return toFile
         }
     }
+    open val defaultExecutable: String by lazy {
+        getPathList()
+            .map { Paths.get(it, linterName()).toString() }
+            .firstOrNull { canExecute(it) } ?: ""
+    }
 }

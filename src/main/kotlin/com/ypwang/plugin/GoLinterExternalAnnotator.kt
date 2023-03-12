@@ -94,9 +94,11 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
     override fun collectInformation(file: PsiFile): PsiFile? =
         runReadAction {
             val project = file.project
+            val platform = platformFactory(project)
             if (file is GoFile && file.isValid && file.virtualFile != null &&
-                // valid linter executable
-                platformFactory(project).canExecute(GoLinterSettings.getInstance(project).goLinterExe))
+                // valid linter executable or config file + linter in path
+                (platform.canExecute(GoLinterSettings.getInstance(project).goLinterExe) ||
+                        (customConfigDetected(project.basePath!!).isPresent && platform.defaultExecutable.isNotEmpty())))
                 file
             else
                 null
@@ -279,8 +281,12 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
     }
 
     private fun buildParameters(file: PsiFile, project: Project, platform: Platform, settings: GoLinterSettings, targetDir: String): List<String> {
+        var exe = settings.goLinterExe
+        if (exe.isEmpty())
+            exe = platform.defaultExecutable
+
         val parameters = mutableListOf(
-            platform.toRunningOSPath(settings.goLinterExe), "run",
+            platform.toRunningOSPath(exe), "run",
             "--out-format", "json",
             "--allow-parallel-runners",
             // control concurrency

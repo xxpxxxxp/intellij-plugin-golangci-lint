@@ -113,7 +113,7 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
         platform = Platform.Companion.platformFactory(project);
         settings = GoLinterSettings.getInstance(project);
 
-        linterChooseComboBox.setRenderer(new FileExistCellRender());
+        linterChooseComboBox.setRenderer(new FileExistCellRender(project));
         linterChooseComboBox.addActionListener(this::linterSelected);
         concurrencyComboBox.addActionListener(l -> modified = true);
         linterChooseButton.addActionListener(e -> linterChoose());
@@ -488,7 +488,7 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
 
         if (enabledLinters == allLinters.stream().filter(GoLinter::getDefaultEnabled).map(GoLinter::getName).collect(Collectors.toSet())) {
             settings.setLinterSelected(false);
-        } else {
+        } else if (!enabledLinters.isEmpty()) {
             settings.setLinterSelected(true);
             settings.setEnabledLinters(new ArrayList<>(enabledLinters));
         }

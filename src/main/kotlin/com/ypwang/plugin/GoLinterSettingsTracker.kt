@@ -31,49 +31,52 @@ class GoLinterSettingsTracker : StartupActivity.DumbAware {
                         return
 
                     val platform = platformFactory(project)
-                    if (!platform.canExecute(settings.goLinterExe)) {
-                        noExecutableNotification(project)
-                        return
-                    }
+                    if (platform.canExecute(settings.goLinterExe)) {
+                        val result = platform.runProcess(
+                            listOf(platform.toRunningOSPath(settings.goLinterExe), "version", "--format", "json"),
+                            null,
+                            listOf(Const_Path)
+                        )
+                        when (result.returnCode) {
+                            0 ->
+                                try {
+                                    val curVersion = Gson().fromJson(result.stdout, GolangciLintVersion::class.java).version
+                                    val timeout = 3000  // 3000ms
+                                    val latestMeta = HttpClientBuilder.create()
+                                        .disableContentCompression()
+                                        .setDefaultRequestConfig(
+                                            RequestConfig.custom()
+                                                .setConnectTimeout(timeout)
+                                                .setConnectionRequestTimeout(timeout)
+                                                .setSocketTimeout(timeout).build()
+                                        )
+                                        .build()
+                                        .use { getLatestReleaseMeta(it) }
+                                    if (!curVersion.matches(Regex("""\d+\.\d+\.\d+""")))
+                                        updateNotification(project, "golangci-lint is custom built: $curVersion", latestMeta)
+                                    else if (compareVersion(latestMeta.name.substring(1), curVersion) > 0)
+                                        updateNotification(project, "golangci-lint update available", latestMeta)
+                                } catch (e: Exception) {
+                                    // ignore
+                                }
 
-                    val result = platform.runProcess(
-                        listOf(platform.toRunningOSPath(settings.goLinterExe), "version", "--format", "json"),
-                        null,
-                        listOf(Const_Path)
-                    )
-                    when (result.returnCode) {
-                        0 ->
-                            try {
-                                val curVersion = Gson().fromJson(result.stdout, GolangciLintVersion::class.java).version
-                                val timeout = 3000  // 3000ms
-                                val latestMeta = HttpClientBuilder.create()
-                                    .disableContentCompression()
-                                    .setDefaultRequestConfig(
-                                        RequestConfig.custom()
-                                            .setConnectTimeout(timeout)
-                                            .setConnectionRequestTimeout(timeout)
-                                            .setSocketTimeout(timeout).build()
-                                    )
-                                    .build()
-                                    .use { getLatestReleaseMeta(it) }
-                                if (!curVersion.matches(Regex("""\d+\.\d+\.\d+""")))
-                                    updateNotification(project, "golangci-lint is custom built: $curVersion", latestMeta)
-                                else if (compareVersion(latestMeta.name.substring(1), curVersion) > 0)
-                                    updateNotification(project, "golangci-lint update available", latestMeta)
-                            } catch (e: Exception) {
-                                // ignore
+                            2 -> {
+                                // panic!
+                                if (isGo18(project))
+                                    notificationGroup.createNotification(
+                                        "Incompatible golangci-lint with Go1.18",
+                                        "Please update golangci-lint after v1.45.0",
+                                        NotificationType.INFORMATION
+                                    ).notify(project)
                             }
-
-                        2 -> {
-                            // panic!
-                            if (isGo18(project))
-                                notificationGroup.createNotification(
-                                    "Incompatible golangci-lint with Go1.18",
-                                    "Please update golangci-lint after v1.45.0",
-                                    NotificationType.INFORMATION
-                                ).notify(project)
                         }
                     }
+
+                    if (findCustomConfigInPath(project.basePath!!).isPresent && platform.defaultExecutable.isNotEmpty())
+                        // if there exist custom config and linter in path, will use them, skip warning
+                        return
+
+                    noExecutableNotification(project)
                 } catch (ignore: Throwable) {
                     // ignore
                 }
