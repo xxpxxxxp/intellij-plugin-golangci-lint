@@ -22,8 +22,8 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
+import com.intellij.util.containers.SLRUMap
 import com.jetbrains.rd.util.first
-import com.twelvemonkeys.util.LRUMap
 import com.ypwang.plugin.form.GoLinterConfigurable
 import com.ypwang.plugin.handler.DefaultHandler
 import com.ypwang.plugin.model.LintIssue
@@ -85,7 +85,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
      *  If multiple projects are opened, this plugin will cache a lot issues and eventually eat up all memory, slow down the IDE
      *  use LRU map to reduce memory usage
      */
-    private val cache = LRUMap<String, Pair<Long, List<LintIssue>>>(19)
+    private val cache = SLRUMap<String, Pair<Long, List<LintIssue>>>(23, 19)
 
     data class Result(val matchName: String, val annotations: List<LintIssue>)
 
@@ -141,7 +141,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
         run {
             // see if cached
             val issueWithTTL = synchronized(cache) {
-                cache[cachePath]
+                cache.get(cachePath)
             }
 
             if (
@@ -166,7 +166,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                 file.virtualFile.charset
             )
             synchronized(cache) {
-                cache[cachePath] = System.currentTimeMillis() to issues
+                cache.put(cachePath, System.currentTimeMillis() to issues)
             }
 
             Result(matchName, issues)
