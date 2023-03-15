@@ -70,6 +70,7 @@ class GoLinterSettingsTracker : StartupActivity.DumbAware {
                                     ).notify(project)
                             }
                         }
+                        return
                     }
 
                     if (findCustomConfigInPath(project.basePath!!).isPresent && platform.defaultExecutable.isNotEmpty())
