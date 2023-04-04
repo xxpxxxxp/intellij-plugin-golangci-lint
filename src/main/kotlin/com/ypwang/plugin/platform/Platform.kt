@@ -5,6 +5,7 @@ import com.goide.project.GoProjectLibrariesService
 import com.goide.sdk.GoSdkService
 import com.goide.vgo.configuration.VgoProjectSettings
 import com.intellij.execution.wsl.WslPath
+import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -199,4 +200,6 @@ abstract class Platform(protected val project: Project) {
             .map { Paths.get(it, linterName()).toString() }
             .firstOrNull { canExecute(it) } ?: ""
     }
+    open fun adjustLinterExeChooser(initial: FileChooserDescriptor): FileChooserDescriptor =
+        initial.also { it.withFileFilter { vf -> this.canExecute(vf.path) } }
 }

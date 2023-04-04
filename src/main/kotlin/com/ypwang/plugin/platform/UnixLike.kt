@@ -1,5 +1,6 @@
 package com.ypwang.plugin.platform
 
+import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.project.Project
 import com.ypwang.plugin.model.GithubRelease
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
@@ -45,4 +46,7 @@ open class Linux(project: Project) : UnixLikePlatform(project) {
 
 class Mac(project: Project) : UnixLikePlatform(project) {
     override fun getPlatformSpecificBinName(meta: GithubRelease): String = "${LinterName}-${meta.name.substring(1)}-darwin-${arch()}.tar.gz"
+    override fun adjustLinterExeChooser(initial: FileChooserDescriptor): FileChooserDescriptor {
+        return super.adjustLinterExeChooser(initial).also { it.isForcedToUseIdeaFileChooser = true }
+    }
 }

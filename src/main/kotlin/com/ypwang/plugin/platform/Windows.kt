@@ -1,5 +1,6 @@
 package com.ypwang.plugin.platform
 
+import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.project.Project
 import com.ypwang.plugin.model.GithubRelease
 import java.io.FileInputStream
@@ -40,4 +41,6 @@ class Windows(project: Project) : Platform(project) {
         }.toString()
     override fun linterName(): String = "$LinterName.exe"
     override fun defaultPath(): String = System.getenv("PUBLIC")
+    override fun adjustLinterExeChooser(initial: FileChooserDescriptor): FileChooserDescriptor =
+        initial.also { it.withFileFilter { vf -> "exe".equals(vf.extension, ignoreCase = true) } }
 }

@@ -6,6 +6,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.options.SearchableConfigurable;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.progress.ProcessCanceledException;
@@ -15,7 +16,6 @@ import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogBuilder;
 import com.intellij.openapi.ui.JBPopupMenu;
-import com.intellij.openapi.util.Condition;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -32,7 +32,6 @@ import com.ypwang.plugin.GoLinterSettings;
 import com.ypwang.plugin.UtilitiesKt;
 import com.ypwang.plugin.model.GoLinter;
 import com.ypwang.plugin.platform.Platform;
-import com.ypwang.plugin.platform.Windows;
 import kotlin.Unit;
 import org.apache.commons.lang.StringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -374,7 +373,7 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
             allLinters.clear();
             enabledLinters.clear();
 
-            if (selectedLinter != null && new File(selectedLinter).canExecute()) {
+            if (selectedLinter != null && platform.canExecute(selectedLinter)) {
                 try {
                     List<String> arguments = new ArrayList<>();
                     arguments.add(platform.toRunningOSPath(selectedLinter));
@@ -581,23 +580,16 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
     }
 
     private void linterChoose() {
-        FileChooserDescriptor fileChooserDescriptor = new FileChooserDescriptor(true, false, false, false, false, false);
-
-        Condition<VirtualFile> filter;
-        if (platform instanceof Windows)
-            filter = file -> "exe".equalsIgnoreCase(file.getExtension());
-        else
-            filter = file -> platform.canExecute(file.getPath());
-        fileChooserDescriptor.withFileFilter(filter);
-
         String hintPath = (String) linterChooseComboBox.getSelectedItem();
         if (hintPath == null || hintPath.isEmpty()) {
             hintPath = platform.defaultPath();
         }
 
-        VirtualFile file = FileChooser.chooseFile(fileChooserDescriptor, GoLinterConfigurable.this.settingPanel, null,
+        VirtualFile file = FileChooser.chooseFile(
+                platform.adjustLinterExeChooser(FileChooserDescriptorFactory.createSingleFileNoJarsDescriptor()),
+                this.settingPanel,
+                null,
                 LocalFileSystem.getInstance().findFileByPath(hintPath));
-
         if (file != null) {
             // because `file.getPath()` returns linux path, seems weird on windows
             String systemPath = Paths.get(file.getPath()).toString();

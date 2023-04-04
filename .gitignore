@@ -3,5 +3,3 @@
 .gradle
 build/
 project/
-
-gradle.properties
