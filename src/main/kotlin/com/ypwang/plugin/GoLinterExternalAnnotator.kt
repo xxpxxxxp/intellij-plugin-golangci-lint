@@ -493,7 +493,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                         else ->
                             notificationGroup.createNotification(
                                     ErrorTitle,
-                                    "Please make sure no syntax or config error, then run 'go mod tidy' to ensure deps ok",
+                                    processResult.stderr,
                                     NotificationType.WARNING).apply {
                                 this.addAction(NotificationAction.createSimple("Configure") {
                                     ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterConfigurable(project))
