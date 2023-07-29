@@ -104,8 +104,8 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                 null
         }
 
-    override fun doAnnotate(file: PsiFile): Result? {
-        val project = file.project
+    override fun doAnnotate(file: PsiFile?): Result? {
+        val project = file?.project ?: return null
         val settings = GoLinterSettings.getInstance(project)
         val absolutePath = Paths.get(file.virtualFile.path)     // file's absolute path
 
@@ -181,7 +181,10 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
         val fixes: Array<IntentionAction>
     )
 
-    override fun apply(file: PsiFile, annotationResult: Result, holder: AnnotationHolder) {
+    override fun apply(file: PsiFile, annotationResult: Result?, holder: AnnotationHolder) {
+        if (annotationResult == null)
+            return
+
         val document = PsiDocumentManager.getInstance(file.project).getDocument(file) ?: return
         var lineShift = -1      // linter reported line is 1-based
         var shiftCount = 0

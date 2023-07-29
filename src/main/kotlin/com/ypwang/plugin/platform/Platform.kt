@@ -3,6 +3,7 @@ package com.ypwang.plugin.platform
 import com.goide.project.GoApplicationLibrariesService
 import com.goide.project.GoProjectLibrariesService
 import com.goide.sdk.GoSdkService
+import com.goide.sdk.GoSdkUtil
 import com.goide.vgo.configuration.VgoProjectSettings
 import com.intellij.execution.wsl.WslPath
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
@@ -94,19 +95,17 @@ abstract class Platform(protected val project: Project) {
         }
 
         // get GOPATH from IDE, combine with system GOPATH
-        fun combineGoPath(project: Project, idePathConverter: ((String) -> String)?, gopath: String): List<String> {
-            val goPluginSettings = GoProjectLibrariesService.getInstance(project)
-            // IDE Project GOPATH > IDE Global GOPATH > System GOPATH
-            var paths = (goPluginSettings.libraryRootUrls + GoApplicationLibrariesService.getInstance().libraryRootUrls)
-                .map { Paths.get(VirtualFileManager.extractPath(it)).toString() }   // IDE path to host OS path
-                .map { idePathConverter?.invoke(it) ?: it }                         // OS dependent path converting
-
-            if (goPluginSettings.isUseGoPathFromSystemEnvironment && gopath.isNotBlank())
-                // + System GOPATH
-                paths = paths + gopath
-
-            return paths
-        }
+        fun combineGoPath(project: Project, idePathConverter: ((String) -> String)?): List<String> =
+            mutableListOf<String>().apply {
+                val goPluginSettings = GoProjectLibrariesService.getInstance(project)
+                // IDE Project GOPATH > IDE Global GOPATH > System GOPATH
+                this.addAll(goPluginSettings.libraryRootUrls)
+                this.addAll(GoApplicationLibrariesService.getInstance().libraryRootUrls)
+                if (goPluginSettings.isUseGoPathFromSystemEnvironment)
+                    // + System GOPATH
+                    this.addAll(GoSdkUtil.getGoPathsRootsFromEnvironment().map { it.url })
+            }.map { Paths.get(VirtualFileManager.extractPath(it)).toString() }   // IDE path to host OS path
+            .map { idePathConverter?.invoke(it) ?: it }                         // OS dependent path converting
 
         // IDE GO111MODULE or system GO111MODULE
         fun combineModuleOn(project: Project, env: String): String =
@@ -114,11 +113,10 @@ abstract class Platform(protected val project: Project) {
 
         // immutable in current idea process, for host OS ==============================================================
         private val systemPath = System.getenv(Const_Path) ?: ""
-        private val systemGoPath = System.getenv(Const_GoPath) ?: ""
         private val systemModuleOn = System.getenv(Const_GoModule) ?: ""
         private val envOverride = mapOf<String, (Project) -> String>(
             Const_Path to { p -> combinePath(p, null, systemPath).joinToString(File.pathSeparator) },
-            Const_GoPath to { p -> combineGoPath(p, null, systemGoPath).joinToString(File.pathSeparator) },
+            Const_GoPath to { p -> combineGoPath(p, null).joinToString(File.pathSeparator) },
             Const_GoModule to { p -> combineModuleOn(p, systemModuleOn) },
         )
     }

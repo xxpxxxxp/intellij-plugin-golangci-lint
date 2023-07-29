@@ -19,7 +19,7 @@ class WSL(project: Project, private val distribution: WSLDistribution): Linux(pr
 
         private val envOverride = mapOf<String, (Project, String, (String) -> String) -> String>(
             Const_Path to { p, path, converter -> combinePath(p, converter, path).joinToString(pathSeparator) },
-            Const_GoPath to { p, path, converter -> combineGoPath(p, converter, path).joinToString(pathSeparator) },
+            Const_GoPath to { p, _, converter -> combineGoPath(p, converter).joinToString(pathSeparator) },
             Const_GoModule to { p, path, _ -> combineModuleOn(p, path) }
         )
     }

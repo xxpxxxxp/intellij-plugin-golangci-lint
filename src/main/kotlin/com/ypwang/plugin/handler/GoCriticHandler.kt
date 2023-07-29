@@ -3,6 +3,7 @@ package com.ypwang.plugin.handler
 import com.goide.psi.*
 import com.goide.psi.impl.GoElementFactory
 import com.goide.quickfix.GoRenameToQuickFix
+import com.goide.quickfix.GoUnwrapParensQuickFix
 import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.codeInspection.LocalQuickFixOnPsiElementAsIntentionAdapter
 import com.intellij.openapi.editor.Document
@@ -106,7 +107,7 @@ object GoCriticHandler : ProblemHandler() {
             }
 
             addHandler(this, "typeUnparen:") { _, _, _, _, element: GoParenthesesExpr ->
-                arrayOf<IntentionAction>(GoDeParentheseFix(element)) to element.textRange
+                arrayOf<IntentionAction>(GoUnwrapParensQuickFix(element)) to element.textRange
             }
 
             addHandler(this, "regexpSimplify:") { _, _, issue, _, element: GoStringLiteral ->

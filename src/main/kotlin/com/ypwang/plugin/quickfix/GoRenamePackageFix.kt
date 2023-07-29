@@ -14,6 +14,6 @@ class GoRenamePackageFix(element: GoPackageClause, private val replace: String)
     override fun getText(): String = "Rename to '$replace' (caution: private fields are inaccessible then)"
 
     override fun invoke(project: Project, file: PsiFile, editor: Editor?, startElement: PsiElement, endElement: PsiElement) {
-        startElement.replace(GoElementFactory.createPackageClause(project, replace))
+        startElement.replace(GoElementFactory.createFileFromText(project, "package $replace").getPackage()!!)
     }
 }

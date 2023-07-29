@@ -29,8 +29,8 @@ class GoReplaceParameterTypeFix(
         // -1 means in current package / internal package, no need to import
         if (moduleCut != -1) {
             val goImport = GoImport("$pre${shortName.substring(0, moduleCut)}")
-            CommandProcessor.getInstance().executeCommand(project, {
-                ApplicationManager.getApplication().runWriteAction {
+            ApplicationManager.getApplication().runWriteAction {
+                CommandProcessor.getInstance().executeCommand(project, {
                     if (alreadyImportedPackagesPaths(file).contains(goImport.importPath)) {
                         GoOptimizedImportsTracker.removeOptimizedImport(file, goImport)
                     } else {
@@ -45,8 +45,8 @@ class GoReplaceParameterTypeFix(
                             GoOptimizedImportsTracker.removeOptimizedImport(file, goImport)
                         }
                     }
-                }
-            }, "Add import", null)
+                }, "Add import", null)
+            }
         }
 
         // JB got a weird issue if directly replace lastChild
