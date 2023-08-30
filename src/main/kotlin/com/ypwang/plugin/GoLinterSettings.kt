@@ -14,6 +14,7 @@ class GoLinterSettingsState : BaseState() {
     var checkGoLinterExe by property(true)
     // don't use too much CPU. Runtime should have at least 1 available processor, right?
     var concurrency by property((Runtime.getRuntime().availableProcessors() + 3) / 4) { it == (Runtime.getRuntime().availableProcessors() + 3) / 4 }
+    var severity by string()
 }
 
 @State(name = "GoLinterSettings", storages = [(Storage("golinter.xml"))])
@@ -54,6 +55,10 @@ class GoLinterSettings(internal val project: Project): SimplePersistentStateComp
     var concurrency
         get() = state.concurrency
         set(value) { state.concurrency = value }
+
+    var severity
+        get() = state.severity
+        set(value) { state.severity = value }
 
     override fun noStateLoaded() {
         super.noStateLoaded()
