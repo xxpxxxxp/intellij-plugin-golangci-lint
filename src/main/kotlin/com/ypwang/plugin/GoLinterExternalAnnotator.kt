@@ -182,6 +182,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
     )
 
     override fun apply(file: PsiFile, annotationResult: Result, holder: AnnotationHolder) {
+        val settings = GoLinterSettings.getInstance(file.project)
         val document = PsiDocumentManager.getInstance(file.project).getDocument(file) ?: return
         var lineShift = -1      // linter reported line is 1-based
         var shiftCount = 0
@@ -235,10 +236,15 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                 // just ignore it
             }
         }
+        var severity = HighlightSeverity.GENERIC_SERVER_ERROR_OR_WARNING
+        when (settings.severity) {
+            "Warning" -> severity = HighlightSeverity.WARNING
+            "Error" -> severity = HighlightSeverity.ERROR
+        }
 
         beforeDirtyZone.addAll(afterDirtyZone)
         beforeDirtyZone.forEach {
-            val builder = holder.newAnnotation(HighlightSeverity.GENERIC_SERVER_ERROR_OR_WARNING, it.description)
+            val builder = holder.newAnnotation(severity, it.description)
                 .range(it.range)
 
             for (fix in it.fixes) {

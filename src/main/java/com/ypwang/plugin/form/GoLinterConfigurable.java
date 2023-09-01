@@ -92,6 +92,7 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
     private JPanel linterSelectPanel;
     private JCheckBox projectRootCheckBox;
     private JComboBox<Integer> concurrencyComboBox;
+    private JComboBox severity;
     private AsyncProcessIcon.Big refreshProcessIcon;
     private JTable linterTable;
 
@@ -492,6 +493,8 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
             settings.setEnabledLinters(new ArrayList<>(enabledLinters));
         }
 
+        settings.setSeverity((String) severity.getSelectedItem());
+
         lastSavedTime = System.currentTimeMillis();
         modified = false;
     }
@@ -533,6 +536,8 @@ public class GoLinterConfigurable implements SearchableConfigurable, Disposable 
         } else {
             initializeLinters();
         }
+
+        severity.setSelectedItem(settings.getSeverity());
 
         modified = false;
     }
