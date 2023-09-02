@@ -185,6 +185,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
         if (annotationResult == null)
             return
 
+        val settings = GoLinterSettings.getInstance(file.project)
         val document = PsiDocumentManager.getInstance(file.project).getDocument(file) ?: return
         var lineShift = -1      // linter reported line is 1-based
         var shiftCount = 0
@@ -238,10 +239,15 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                 // just ignore it
             }
         }
+        var severity = HighlightSeverity.GENERIC_SERVER_ERROR_OR_WARNING
+        when (settings.severity) {
+            "Warning" -> severity = HighlightSeverity.WARNING
+            "Error" -> severity = HighlightSeverity.ERROR
+        }
 
         beforeDirtyZone.addAll(afterDirtyZone)
         beforeDirtyZone.forEach {
-            val builder = holder.newAnnotation(HighlightSeverity.GENERIC_SERVER_ERROR_OR_WARNING, it.description)
+            val builder = holder.newAnnotation(severity, it.description)
                 .range(it.range)
 
             for (fix in it.fixes) {
@@ -496,7 +502,7 @@ class GoLinterExternalAnnotator : ExternalAnnotator<PsiFile, GoLinterExternalAnn
                         else ->
                             notificationGroup.createNotification(
                                     ErrorTitle,
-                                    "Please make sure no syntax or config error, then run 'go mod tidy' to ensure deps ok",
+                                    processResult.stderr,
                                     NotificationType.WARNING).apply {
                                 this.addAction(NotificationAction.createSimple("Configure") {
                                     ShowSettingsUtil.getInstance().editConfigurable(project, GoLinterConfigurable(project))
