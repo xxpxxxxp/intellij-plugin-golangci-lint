@@ -10,6 +10,7 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.util.EnvironmentUtil
 import com.ypwang.plugin.*
 import com.ypwang.plugin.model.GithubRelease
 import com.ypwang.plugin.model.RunProcessResult
@@ -90,6 +91,15 @@ abstract class Platform(protected val project: Project) {
             if (path.isNotBlank())
                 // system path itself is absolute for running OS
                 rst.add(path)
+
+            // try to fix macOS empty system environment variables, read environment variables from .zshrc or .bashrc
+            // see: https://github.com/JetBrains/intellij-community/blob/master/platform/util/src/com/intellij/util/EnvironmentUtil.java#L72
+            if (SystemInfo.isMac) {
+                val systemEnvPath = EnvironmentUtil.getValue(Const_Path) ?: ""
+                if (systemEnvPath.isNotBlank()) {
+                    rst.add(systemEnvPath)
+                }
+            }
 
             return rst
         }
