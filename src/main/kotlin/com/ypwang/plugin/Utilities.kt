@@ -21,11 +21,12 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.*
 
-private const val notificationGroupName = "Go linter notifications"
 private val configFiles = arrayOf(".golangci.json", ".golangci.toml", ".golangci.yaml", ".golangci.yml")  // ordered by precedence
 
 val logger = Logger.getInstance("go-linter")
-val notificationGroup: NotificationGroup = NotificationGroupManager.getInstance().getNotificationGroup(notificationGroupName)
+val notificationGroup: NotificationGroup by lazy {
+    NotificationGroupManager.getInstance().getNotificationGroup("Go linter notifications")
+}
 
 fun findCustomConfigInPath(path: String?): Optional<String> {
     val varPath: String? = path

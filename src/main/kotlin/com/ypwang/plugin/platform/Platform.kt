@@ -92,15 +92,6 @@ abstract class Platform(protected val project: Project) {
                 // system path itself is absolute for running OS
                 rst.add(path)
 
-            // try to fix macOS empty system environment variables, read environment variables from .zshrc or .bashrc
-            // see: https://github.com/JetBrains/intellij-community/blob/master/platform/util/src/com/intellij/util/EnvironmentUtil.java#L72
-            if (SystemInfo.isMac) {
-                val systemEnvPath = EnvironmentUtil.getValue(Const_Path) ?: ""
-                if (systemEnvPath.isNotBlank()) {
-                    rst.add(systemEnvPath)
-                }
-            }
-
             return rst
         }
 
@@ -122,8 +113,8 @@ abstract class Platform(protected val project: Project) {
             if (VgoProjectSettings.getInstance(project).isIntegrationEnabled || Objects.equals("on", env)) "on" else "off"
 
         // immutable in current idea process, for host OS ==============================================================
-        private val systemPath = System.getenv(Const_Path) ?: ""
-        private val systemModuleOn = System.getenv(Const_GoModule) ?: ""
+        private val systemPath = EnvironmentUtil.getValue(Const_Path) ?: ""
+        private val systemModuleOn = EnvironmentUtil.getValue(Const_GoModule) ?: ""
         private val envOverride = mapOf<String, (Project) -> String>(
             Const_Path to { p -> combinePath(p, null, systemPath).joinToString(File.pathSeparator) },
             Const_GoPath to { p -> combineGoPath(p, null).joinToString(File.pathSeparator) },

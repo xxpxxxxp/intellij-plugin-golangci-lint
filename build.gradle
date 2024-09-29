@@ -1,7 +1,9 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id 'java'
-    id 'org.jetbrains.intellij' version '1.15.0'
-    id 'org.jetbrains.kotlin.jvm' version '1.9.0'
+    id 'org.jetbrains.intellij' version '1.17.4'
+    id 'org.jetbrains.kotlin.jvm' version '2.0.20'
 }
 
 static def gitTag() {
@@ -32,18 +34,16 @@ repositories {
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-    version = '232.8660.48-EAP-SNAPSHOT'
+    version = 'LATEST-EAP-SNAPSHOT'
     type = 'IU'
-    plugins = ['org.jetbrains.plugins.go:232.8660.48']
+    plugins = ['org.jetbrains.plugins.go:243.16718.32']
     updateSinceUntilBuild = false
 }
 
-compileKotlin {
-    kotlinOptions.jvmTarget = "17"
-}
-
-compileTestKotlin {
-    kotlinOptions.jvmTarget = "17"
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
 }
 
 def changeLog() {
