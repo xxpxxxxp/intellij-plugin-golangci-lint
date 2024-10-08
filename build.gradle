@@ -36,7 +36,7 @@ repositories {
 intellij {
     version = 'LATEST-EAP-SNAPSHOT'
     type = 'IU'
-    plugins = ['org.jetbrains.plugins.go:243.16718.32']
+    plugins = ['org.jetbrains.plugins.go:243.18137.10']
     updateSinceUntilBuild = false
 }
 
